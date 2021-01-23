@@ -8,7 +8,7 @@ r""":math:`N^{(1)}_L` quadratic estimator bias calculation module.
 
     Note:
 
-        For composed estimators all will be stored on the fly
+        For composed estimators, the N1 for all pairs will be calculated and stored in the process
 
     Note:
 

@@ -1,14 +1,17 @@
 import setuptools
 from numpy.distutils.core import setup
 from numpy.distutils.misc_util import Configuration
-
+import glob
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 
 def configuration(parent_package='', top_path=''):
     config = Configuration('', parent_package, top_path)
-    config.add_extension('n1.n1f', ['n1/n1f.f90'],
+    fmods = glob.glob('n1/n1f*.f90')
+    for fmod in fmods:
+        name = 'n1.' + (fmod.split('/')[1]).replace('.f90', '')
+        config.add_extension(name , [fmod],
                          libraries=['gomp'],  extra_compile_args=['-Xpreprocessor', '-fopenmp', '-w'])
     return config
 

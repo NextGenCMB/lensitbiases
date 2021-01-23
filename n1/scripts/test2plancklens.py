@@ -106,7 +106,15 @@ def get_N1_GMV(exp, k1='p', k2='p'):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Planck 2018 QE calculation example')
+    parser.add_argument('-k1k2s', dest='k1k2s', action='store', nargs='+', default=['ptt ptt', 'ptt pte', 'ptt ptb', 'ptt pee', 'ptt peb', 'pte pte', 'pte ptb', 'pte pee', 'pte peb',
+                 'ptb ptb', 'ptb pee', 'ptb peb', 'pee pee', 'pee peb', 'peb peb'])
+    parser.add_argument('-v', dest='version', action='store', nargs=1, type=int, default=1)
     args = parser.parse_args()
+
+    if args.version[0] == 2:
+        print("Switching module version to " + str(args.version[0]))
+        from n1 import n1f_v2
+        n1.n1f = n1f_v2
     L = 400
     for exp in ['PL']:
         fals = get_fal_sTP(exp, jt_tp=False)[1]
@@ -135,10 +143,8 @@ if __name__ == '__main__':
         lps += list(range(lps[-1] + 300, lmaxphi, 300))
         if lps[-1] != lmaxphi: lps.append(lmaxphi)
         lps = np.array(lps)
-        k1k2s = ['ptt ptt', 'ptt pte', 'ptt ptb', 'ptt pee', 'ptt peb', 'pte pte', 'pte ptb', 'pte pee', 'pte peb',
-                 'ptb ptb', 'ptb pee', 'ptb peb', 'pee pee', 'pee peb', 'peb peb']
         devs = []
-        for k1k2 in k1k2s:
+        for k1k2 in args.k1k2s:
             Nt = 1
             kA, kB = k1k2.split(' ')
             t0 = time.time()
