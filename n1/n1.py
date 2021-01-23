@@ -2,10 +2,17 @@ r""":math:`N^{(1)}_L` quadratic estimator bias calculation module.
 
     This module contains the :math:`N^{(1)}_L` bias calculation scripts (for lensing and other quadratic estimators)
 
+    All calculations are performed using the flat-sky approximation from Fortran code.
+    The Fortran code implements Eq. A.3. of the 2018 Planck lensing paper https://arxiv.org/abs/1807.06210,
+    with integration on :math:`\bf{\ell_1}` and the anisotropy source wavevector.
+
     Note:
-        All calculations are performed using the flat-sky approximation from Fortran code
 
         For composed estimators all will be stored on the fly
+
+    Note:
+
+        The input spectra are those used in QE weights and the CMB responses (e.g. :math:`\tilde C^{T\nabla T}_\ell`)
 
 
 """
@@ -32,13 +39,20 @@ estimator_keys_derived = ['p', 'p_p', 'p_tp', 'p_eb', 'p_te', 'p_tb',
                           'f', 'f_p', 'f_tp', 'f_eb', 'f_te', 'f_tb',
                           'x', 'x_p', 'x_tp', 'x_eb', 'x_te', 'x_tb']
 
+def _calc_n1L_sTP(L, cl_kind, kA, kB, k_ind, cltt, clte, clee, clttw, cltew, cleew,
+                  ftlA, felA, fblA, ftlB, felB, fblB, lminA, lminB, dL, lps):
+    """Direct call to f90 code for independent T-P filtering
+
+    """
+    return n1f.n1l(L, cl_kind, kA, kB, k_ind,  cltt, clte, clee, clttw, cltew, cleew,
+                   ftlA, felA, fblA, ftlB, felB, fblB, lminA, lminB, dL, lps)
 
 def _get_est_derived(k, lmax):
     r""" Estimator combinations with some weighting.
 
-    Args:
-        k (str): Quadratic esimator key.
-        lmax (int): weights are given up to lmax.
+        Args:
+            k (str): Quadratic esimator key.
+            lmax (int): weights are given up to lmax.
 
     """
     clo = np.ones(lmax + 1, dtype=float)
@@ -75,9 +89,9 @@ class library_n1:
 
         Args:
             lib_dir: results will be stored there
-            cltt: CMB TT spectrum (used for map CMB spectrum and QE weights)
-            clte: CMB TE spectrum (used for map CMB spectrum and QE weights)
-            clee: CMB EE spectrum (used for map CMB spectrum and QE weights)
+            cltt: CMB TT spectrum (used for CMB response spectrum)
+            clte: CMB TE spectrum (used for CMB response spectrum)
+            clee: CMB EE spectrum (used for CMB response spectrum)
             lmaxphi: maximum multipole of the anistropy source (clpp for standard lensing N1) to consider
             dL: flat-sky numerical integration parameter, see n1.f90
             lps: flat-sky numerical integration parameter, see n1.f90
@@ -87,13 +101,7 @@ class library_n1:
     def __init__(self, lib_dir, cltt, clte, clee, lmaxphi=2500, dL=10, lps=None):
 
         if lps is None:
-            assert lmaxphi > 1200, lmaxphi
-            lps = [1] + list(range(2, 111, 10))
-            lps += list(range(lps[-1] + 30, 580, 30))
-            lps += list(range(lps[-1] + 100, lmaxphi // 2, 100))
-            lps += list(range(lps[-1] + 300, lmaxphi, 300))
-            if lps[-1] != lmaxphi: lps.append(lmaxphi)
-            lps = np.array(lps)
+            lps = self._default_lps_grid(lmaxphi)
 
         self.dL = dL
         self.lps = lps
@@ -114,6 +122,17 @@ class library_n1:
         self.fldb = sql.fldb(os.path.join(lib_dir, 'fldb.db'))
 
         self.lib_dir = lib_dir
+
+
+    @staticmethod
+    def _default_lps_grid(lmaxphi):
+        assert lmaxphi > 1200, lmaxphi
+        lps = [1] + list(range(2, 111, 10))
+        lps += list(range(lps[-1] + 30, 580, 30))
+        lps += list(range(lps[-1] + 100, lmaxphi // 2, 100))
+        lps += list(range(lps[-1] + 300, lmaxphi, 300))
+        if lps[-1] != lmaxphi: lps.append(lmaxphi)
+        return np.array(lps)
 
     def hashdict(self):
         return {'cltt': clhash(self.cltt), 'clte': clhash(self.clte), 'clee': clhash(self.clee),
@@ -138,9 +157,9 @@ class library_n1:
                 ftlB(optional): second leg T-filtering isotropic approximation (if different from the first)
                 felB(optional): second leg E-filtering isotropic approximation (if different from the first)
                 fblB(optional): second leg B-filtering isotropic approximation (if different from the first)
-                clttfid(optional): CMB TT spectrum used in QE weights (if different from instance cltt for map-level CMB spectrum)
-                cltefid(optional): CMB TE spectrum used in QE weights (if different from instance clte for map-level CMB spectrum)
-                cleefid(optional): CMB EE spectrum used in QE weights (if different from instance clee for map-level CMB spectrum)
+                clttfid(optional): CMB TT spectrum used in QE weights (if different from instance cltt for map-level CMB spectrum response)
+                cltefid(optional): CMB TE spectrum used in QE weights (if different from instance clte for map-level CMB spectrum response)
+                cleefid(optional): CMB EE spectrum used in QE weights (if different from instance clee for map-level CMB spectrum response)
                 n1_flat(optional): function used to flatten the discretized output before returning splined entire array
 
             Returns:
@@ -151,9 +170,6 @@ class library_n1:
 
         """
         if kB is None: kB = kA
-        # FIXME:
-        if kA[0] == 's' or kB[0] == 's':
-            assert kA[0] == kB[0], 'point source implented following DH gradient convention, you wd probably need to pick a sign there'
         if ftlB is None: ftlB = ftlA
         if felB is None: felB = felA
         if fblB is None: fblB = fblA
@@ -214,27 +230,7 @@ class library_n1:
                     tret = self.get_n1(tk1, k_ind, cl_kind, ftlA, felA, fblA, Lmax, ftlB=ftlB, felB=felB, fblB=fblB,
                                        clttfid=clttfid, cltefid=cltefid, cleefid=cleefid,
                                        kB=tk2, n1_flat=n1_flat, sglLmode=sglLmode)
-                    tret *= cl1[:Lmax + 1]
-                    tret *= cl2[:Lmax + 1]
-                    ret += tret
-            return ret
-        elif (kA in estimator_keys_derived) and (kB in estimator_keys):
-            ret = 0.
-            for (tk1, cl1) in _get_est_derived(kA, Lmax):
-                tret = self.get_n1(tk1, k_ind, cl_kind, ftlA, felA, fblA, Lmax, ftlB=ftlB, felB=felB, fblB=fblB, kB=kB,
-                                   clttfid=clttfid, cltefid=cltefid, cleefid=cleefid,
-                                   n1_flat=n1_flat, sglLmode=sglLmode)
-                tret *= cl1[:Lmax + 1]
-                ret += tret
-            return ret
-        elif (kA in estimator_keys) and (kB in estimator_keys_derived):
-            ret = 0.
-            for (tk2, cl2) in _get_est_derived(kB, Lmax):
-                tret = self.get_n1(kA, k_ind, cl_kind, ftlA, felA, fblA, Lmax, ftlB=ftlB, felB=felB, fblB=fblB, kB=tk2,
-                                   clttfid=clttfid, cltefid=cltefid, cleefid=cleefid,
-                                   n1_flat=n1_flat, sglLmode=sglLmode)
-                tret *= cl2[:Lmax + 1]
-                ret += tret
+                    ret =ret + tret * cl1[:Lmax + 1] * cl2[:Lmax + 1]
             return ret
         assert 0
 
@@ -279,9 +275,6 @@ class library_n1:
             clttfid=None, cltefid=None, cleefid=None, n1_flat=lambda ell: np.ones(len(ell), dtype=float)):
 
         if kB is None: kB = kA
-        # FIXME:
-        if kA[0] == 's' or kB[0] == 's':
-            assert kA[0] == kB[0], 'point source implented following DH gradient convention, you wd probably need to pick a sign there'
         if fBlmat is None: fBlmat = fAlmat
 
         clttfid = self.cltt if clttfid is None else clttfid
