@@ -1,0 +1,52 @@
+\documentclass[11pt]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{mathrsfs}
+\usepackage{euscript}
+\usepackage{epsfig}
+\usepackage{graphics}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+%\usepackage{timestamp}
+\usepackage{bm}
+\usepackage[usenames,dvipsnames,svgnames,table]{xcolor}
+\usepackage{xspace}
+\usepackage{wasysym}
+\usepackage{times}
+\usepackage{appendix}
+\usepackage{lipsum}
+\usepackage[nolist,nohyperlinks]{acronym}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{simplewick}
+\usepackage{tabularx}
+\usepackage{booktabs}
+%
+
+\begin{document}
+
+\newcommand{\bl}{\boldsymbol{l}}
+\newcommand{\br}{\boldsymbol{r}}
+
+\newcommand{\bll}{\boldsymbol{L}}
+\newcommand{\intL}{\int_{\substack{\bl_1 + \bl_2 \\ =\bll }}}
+\newcommand{\intLp}{\int_{\substack{\bl'_1 + \bl'_2 \\ =\bll' }}}
+
+\begin{equation}
+N^{(1)}(L) = \intL \intLp \Xi_{ij}(\bl_1, \bl_2) \Xi_{pq}(\bl'_1, \bl'_2) \times \big[ C^{\phi \phi}_{|\bl_1+\bl'_1|}f_{ip}(\bl_1, \bl'_1) f_{jq}(\bl_2, \bl'_2) + C^{\phi \phi}_{|\bl_1+\bl'_2|}f_{iq}(\bl_1, \bl'_2) f_{jp}(\bl_2, \bl'_1) \big] \, ,
+\end{equation}
+For completely separable weight and response functions, we may write schematically tje bias as sums of simple terms
+\begin{equation}
+	N^{(1)}(L) \ni  \int d\br\: \xi^{\phi \phi}(\br) h^{12}_{\bll}(\br)\left[ h^{\star, 34}_{\bll}(\br) + h^{\star, 43}_{\bll}(\br)\right]
+\end{equation}
+where the Fourier maps of the $h$ functions are given by, for the appropriate weights $w$,
+\begin{equation}
+	\tilde h^{ij}_{\bll}(\bl) =  w^i(\bl) w^j(\bll - \bl)
+\end{equation}
+Thus, the cost of one of these terms is that a couple of FFT's per $L$.
+
+It looks like the FFTs of the resolution necessary for similar sampling than my current code ($\sim 1 $sec unthreaded per TT lensing term) might correspond to boxes of 64 pixels, which gives me sub-milliseconds python FFF's. 
+For spin-0 QE's and anisotropy source this is particularly simple. For lensing the deflection vector QE's are indeed all separable, but there is a number of terms owing to the two components and is some algebraic mess. One very simple test to start with could be the use the vector form in the QE but the lensing gradient response with 6 fully separable terms. This would lead to $\cdot 6 \times 6 \times 3$ such operations?
+
+\end{document}

@@ -9,3 +9,5 @@ N1 lensing bias calculation and tests
 * make it stand-alone
 
 * include BB
+
+* better impl. of lik-based estimators
