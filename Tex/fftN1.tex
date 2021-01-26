@@ -34,19 +34,37 @@
 \newcommand{\intLp}{\int_{\substack{\bl'_1 + \bl'_2 \\ =\bll' }}}
 
 \begin{equation}
-N^{(1)}(L) = \intL \intLp \Xi_{ij}(\bl_1, \bl_2) \Xi_{pq}(\bl'_1, \bl'_2) \times \big[ C^{\phi \phi}_{|\bl_1+\bl'_1|}f_{ip}(\bl_1, \bl'_1) f_{jq}(\bl_2, \bl'_2) + C^{\phi \phi}_{|\bl_1+\bl'_2|}f_{iq}(\bl_1, \bl'_2) f_{jp}(\bl_2, \bl'_1) \big] \, ,
+\begin{split}
+N^{(1)}(L) = &\intL \intLp \Xi_{ij}(\bl_1, \bl_2) \Xi_{pq}(\bl'_1, \bl'_2) \\ &\times\left[ C^{\phi \phi}_{|\bl_1+\bl'_1|}f_{ip}(\bl_1, \bl'_1) f_{jq}(\bl_2, \bl'_2) + C^{\phi \phi}_{|\bl_1+\bl'_2|}f_{iq}(\bl_1, \bl'_2) f_{jp}(\bl_2, \bl'_1) \right] ,
+\end{split}
 \end{equation}
 For completely separable weight and response functions, we may write schematically tje bias as sums of simple terms
 \begin{equation}
-	N^{(1)}(L) \ni  \int d\br\: \xi^{\phi \phi}(\br) h^{12}_{\bll}(\br)\left[ h^{\star, 34}_{\bll}(\br) + h^{\star, 43}_{\bll}(\br)\right]
+	N^{(1)}(L) \ni  \int d\br\: \xi^{\phi \phi}(\br)\left[ h^{12}_{\bll}(\br) h^{34}_{-\bll}(\br) + g^{12}_{\bll}(\br) g^{43}_{-\bll}(\br)\right ]
 \end{equation}
-where the Fourier maps of the $h$ functions are given by, for the appropriate weights $w$,
+where the Fourier maps of all the $h$ and $g$ functions are given by, for the appropriate weights $w$,
 \begin{equation}
-	\tilde h^{ij}_{\bll}(\bl) =  w^i(\bl) w^j(\bll - \bl)
+	\tilde h^{ij}_{\bll}(\bl) =  w^i(\bl) w^j(\bll - \bl) = w^i(\bl) w^{\star, j}(\bl - \bll)
 \end{equation}
-Thus, the cost of one of these terms is that a couple of FFT's per $L$.
+(Here, the indices 1 2 3 4 corresponds to $i,j,p,q$.)
+Explicitly:
+\begin{equation}
+\begin{split}
+\textrm{for }h^{12}:\quad w^1 &= F^1 W_{12}^{(0)} f^{(0)}_{13}	\quad w^2 = F^2W_{12}^{(1)}f^{(0)}_{24} \\
+\textrm{for }h^{34}:\quad w^3 &= F^3 W_{34}^{(0)} f^{(1)}_{13}	\quad w^4 = F^4W_{34}^{(1)}f^{(1)}_{24} \\
+\textrm{for }g^{12}:\quad w^1 &= F^1 W_{12}^{(0)} f^{(0)}_{14}	\quad w^2 = F^2W_{12}^{(1)}f^{(1)}_{23} \\
+\textrm{for }g^{43}:\quad w^4 &= F^4 W_{34}^{(1)} f^{(1)}_{14}	\quad w^3 = F^3W_{34}^{(0)}f^{(0)}_{23} \\
+\end{split}
+\end{equation}
+(Filters $F$'s can always be absorbed into $W$'s)
+Thus, the cost of one of these terms is that a couple of FFT's per $L$. Creating the $h$'s is super easy (e.g. with np roll)
 
-It looks like the FFTs of the resolution necessary for similar sampling than my current code ($\sim 1 $sec unthreaded per TT lensing term) might correspond to boxes of 64 pixels, which gives me sub-milliseconds python FFF's. 
-For spin-0 QE's and anisotropy source this is particularly simple. For lensing the deflection vector QE's are indeed all separable, but there is a number of terms owing to the two components and is some algebraic mess. One very simple test to start with could be the use the vector form in the QE but the lensing gradient response with 6 fully separable terms. This would lead to $\cdot 6 \times 6 \times 3$ such operations?
 
+It looks like the FFTs of the resolution necessary for similar sampling than my current code ($\sim 1 $sec unthreaded per TT lensing term) might correspond to boxes of 64 pixels, which gives me sub-milliseconds python FFT's. 
+For spin-0 QE's and anisotropy sources this is particularly simple. For lensing the deflection vector QE's are indeed all separable, but there is a number of terms owing to the two components and is some algebraic mess. One very simple test to just check could be the use the vector form in the QE but the lensing gradient response with 6 fully separable terms. This would lead to $\sim 6 \times 6 \times 3$ such operations?
+
+The lensing gradient response is
+\begin{equation}
+	C_{\bl_1} \left( \bll \cdot \bl_1 \right) + C_{\bl_2} \left( \bll \cdot \bl_2 \right) = C_{l_1}\left( l_1^2  + l_{1x} l_{2x} + l_{1y} l_{2y}\right) + C_{l_2}\left( l_2^2  + l_{2x} l_{1x} + l_{2y} l_{1y}\right)
+\end{equation}
 \end{document}

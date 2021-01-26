@@ -91,13 +91,13 @@ def get_N0s(exp, qe_key1='p', qe_key2='p'):
     N0_sTP_x =  nhls_sTP[1] * utils.cli(Rs_sTP[1]) ** 2
     return N0_sTP, N0_jTP, Rs_sTP, Rs_jTP, N0_sTP_x, N0_jTP_x
 
-def get_N1_SQE(exp, k1='p', k2='p'):
+def get_N1_SQE(exp, k1='p', k2='p', ks='p'):
     fals = get_fal_sTP(exp)[1]
     ftlA = fals['tt']
     felA = fals['ee']
     fblA = fals['bb']
     cpp = utils.camb_clfile(os.path.join(CLS, 'FFP10_wdipole_lenspotentialCls.dat'))['pp']
-    return n1_dd.get_n1(k1, 'p', cpp, ftlA, felA, fblA, Lmax=LMAXOUT, kB=k2)
+    return n1_dd.get_n1(k1, ks, cpp, ftlA, felA, fblA, Lmax=LMAXOUT, kB=k2)
 
 def get_N1_GMV(exp, k1='p', k2='p'):
     fals = get_fal_sTP(exp, jt_tp=True)[1]
