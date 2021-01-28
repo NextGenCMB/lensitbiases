@@ -28,6 +28,7 @@
 
 \newcommand{\bl}{\boldsymbol{l}}
 \newcommand{\br}{\boldsymbol{r}}
+\newcommand{\hn}[0]{{\hat n}}
 
 \newcommand{\bll}{\boldsymbol{L}}
 \newcommand{\intL}{\int_{\substack{\bl_1 + \bl_2 \\ =\bll }}}
@@ -46,14 +47,14 @@ where the Fourier maps of all the $h$ and $g$ functions are given by, for the ap
 \begin{equation}
 	\tilde h^{ij}_{\bll}(\bl) =  w^i(\bl) w^j(\bll - \bl) = w^i(\bl) w^{\star, j}(\bl - \bll)
 \end{equation}
-(Here, the indices 1 2 3 4 corresponds to $i,j,p,q$.)
+(Here, the indices 1 2 3 4 corresponds to $i,j,p,q$. NB: THIS ASSUMES complex conjugacy property of the weights!)
 Explicitly:
 \begin{equation}
 \begin{split}
 \textrm{for }h^{12}:\quad w^1 &= F^1 W_{12}^{(0)} f^{(0)}_{13}	\quad w^2 = F^2W_{12}^{(1)}f^{(0)}_{24} \\
 \textrm{for }h^{34}:\quad w^3 &= F^3 W_{34}^{(0)} f^{(1)}_{13}	\quad w^4 = F^4W_{34}^{(1)}f^{(1)}_{24} \\
-\textrm{for }g^{12}:\quad w^1 &= F^1 W_{12}^{(0)} f^{(0)}_{14}	\quad w^2 = F^2W_{12}^{(1)}f^{(1)}_{23} \\
-\textrm{for }g^{43}:\quad w^4 &= F^4 W_{34}^{(1)} f^{(1)}_{14}	\quad w^3 = F^3W_{34}^{(0)}f^{(0)}_{23} \\
+\textrm{for }g^{12}:\quad w^1 &= F^1 W_{12}^{(0)} f^{(0)}_{14}	\quad w^2 = F^2W_{12}^{(1)}f^{(0)}_{23} \\
+\textrm{for }g^{43}:\quad w^4 &= F^4 W_{34}^{(1)} f^{(1)}_{14}	\quad w^3 = F^3W_{34}^{(0)}f^{(1)}_{23} \\
 \end{split}
 \end{equation}
 (Filters $F$'s can always be absorbed into $W$'s)
@@ -63,6 +64,24 @@ Thus, the cost of one of these terms is that a couple of FFT's per $L$. Creating
 It looks like the FFTs of the resolution necessary for similar sampling than my current code ($\sim 1 $sec unthreaded per TT lensing term) might correspond to boxes of 64 pixels, which gives me sub-milliseconds python FFT's. 
 For spin-0 QE's and anisotropy sources this is particularly simple. For lensing the deflection vector QE's are indeed all separable, but there is a number of terms owing to the two components and is some algebraic mess. One very simple test to just check could be the use the vector form in the QE but the lensing gradient response with 6 fully separable terms. This would lead to $\sim 6 \times 6 \times 3$ such operations?
 
+Checks: for the PS-like estimator, with $f = W = 1$, we must have
+\begin{equation}
+	N_L^{(1)} = 2 \int d\br \:\xi^{\phi\phi}(\br) |h_{\bll}^2(\br)|
+\end{equation}
+PROBLEM: For some weightfunctions this seems to super-dependent on the lowest anisotropy source $Cl$
+
+\subsection{curved-sky}
+On the curved-sky (for spin-0 fields only) one get something similar-looking:
+\begin{equation}
+\xi^{\phi\phi}(\hn_1,\hn_2) g^{12}_{LM}(\hn_1,\hn_2) g^{34}_{L,-M}(\hn_1,\hn_2) + ...
+\end{equation}
+where the $g$'s are
+\begin{equation}
+	g(\hn_1, \hn_2) = \int d\hn \:w^1(\hn_1, \hn)w^1(\hn_2, \hn) Y^\dagger_{LM}(\hn)
+\end{equation}
+or similar
+\color{red} This is not exactly the same as the flat-sky, there is some additional terms $e^{i \bll \cdot \hn_2}$ that cancels between the two g's unless I am wrong
+\color{black}
 The lensing gradient response is
 \begin{equation}
 	C_{\bl_1} \left( \bll \cdot \bl_1 \right) + C_{\bl_2} \left( \bll \cdot \bl_2 \right) = C_{l_1}\left( l_1^2  + l_{1x} l_{2x} + l_{1y} l_{2y}\right) + C_{l_2}\left( l_2^2  + l_{2x} l_{1x} + l_{2y} l_{1y}\right)

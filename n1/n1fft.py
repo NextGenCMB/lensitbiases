@@ -3,11 +3,12 @@ import pyfftw
 import os
 import plancklens
 from plancklens import utils
-import lensit as li
-from n1.scripts import test2plancklens as tp
+from scipy.interpolate import UnivariateSpline as spl
+from n1.scripts import test2plancklens_1002000 as tp
 
-dL2did = lambda L: int(ell_mat.lsides[0] * L / (2 * np.pi))
-dnpix2L = lambda npix: 2. * np.pi / ell_mat.lsides[0] * npix
+CLS = os.path.join(os.path.dirname(os.path.abspath(plancklens.__file__)), 'data', 'cls')
+
+
 def Freq(i, N):
     """
      Outputs the absolute integers frequencies [0,1,...,N/2,N/2-1,...,1]
@@ -19,20 +20,13 @@ def Freq(i, N):
     """
     assert (np.all(N % 2 == 0)), "This routine only for even numbers of points"
     return i - 2 * (i >= (N // 2)) * (i % (N // 2))
-def extcl(ell_mat, cl):
-    if len(cl) - 1 < ell_mat.ellmax:
-        dl = np.zeros( ell_mat.ellmax + 1)
+def extcl(lmax, cl):
+    if len(cl) - 1 < lmax:
+        dl = np.zeros(lmax + 1)
         dl[:len(cl)] = cl
     else:
         dl = cl
     return dl
-def cl2ximat(ell_mat, cl):
-    if len(cl) - 1 < ell_mat.ellmax:
-        dl = np.zeros( ell_mat.ellmax + 1)
-        dl[:len(cl)] = cl
-    else:
-        dl = cl
-    return np.fft.irfft2(dl[ELLS])
 
 def get_ellmat(lmin, lmax):
     lside = 2. * np.pi / lmin
@@ -41,26 +35,9 @@ def get_ellmat(lmin, lmax):
     from lensit.ffs_covs.ell_mat import  ell_mat
     return ell_mat(None, (npix, npix), (lside, lside), cache=0)
 
-CLS = os.path.join(os.path.dirname(os.path.abspath(plancklens.__file__)), 'data', 'cls')
-cls_grad = utils.camb_clfile(os.path.join(CLS, 'FFP10_wdipole_gradlensedCls.dat'))
-cls_unl = utils.camb_clfile(os.path.join(CLS, 'FFP10_wdipole_lenspotentialCls.dat'))
-ell_mat = get_ellmat(50, 5000)
-print('lmin max %s %s '%(int(2. * np.pi /  ell_mat.lsides[0]), ell_mat.ellmax) + str(ell_mat.shape))
-fals = tp.get_fal_sTP('PL', 1)[1]
 
-Ft = np.zeros(max(ell_mat.ellmax + 1,  len(fals['tt'])))
-Ft[:len(fals['tt'])] = fals['tt'].copy()
-lmax_ftl = len(fals['tt']) - 1
-print('lmax_ftl ' + str(lmax_ftl))
-ELLS = ell_mat()
-KX = ell_mat.get_kx_mat()
-KY = ell_mat.get_ky_mat()
-iKX =ell_mat.get_ikx_mat()
-iKY =ell_mat.get_iky_mat()
-CTT = extcl(ell_mat, cls_grad['tt'][:lmax_ftl+1])
-FT = Ft[ELLS]
-XIPP = cl2ximat(ell_mat, cls_unl['pp'][:4096])
-
+def get_fXY(k, ls):
+    pass
 
 def shiftF(F, npix, Laxis):
     # Shifts Fourier coefficients by npix values
@@ -68,25 +45,77 @@ def shiftF(F, npix, Laxis):
     #return np.fft.ifftshift(np.roll(np.fft.fftshift(F), npix, axis=Laxis))
     return np.roll(F, npix, axis=Laxis)
 
-def get_N1pyfftw_XY(npixs, xory='x', ks='p', Laxis=0):
+def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
+                    lminbox=50, lmaxbox=5000, lminphi=0, lmaxphi=4096,
+                    cpp=None, spline_result=False,
+                    fftw=False, use_sym=True):
     # Defines grid:
-    shape = ell_mat.shape
-    nx = np.outer(np.ones(shape[0]),  Freq(np.arange(shape[1]), shape[1]))
-    ny = np.outer(Freq(np.arange(shape[0]), shape[0]), np.ones(shape[1]))
-    ls = np.int_(2 * np.pi * np.sqrt(nx ** 2 + ny ** 2) / ell_mat.lsides[0])
-    print(np.min(ls), np.max(ls))
-    FX = FY = FI = FJ = Ft[ls]
-    ones = np.ones(shape, dtype=float)
-    if ks == 'p':
-        fresp = []
-        fresp += [(CTT[ls] * (nx ** 2 + ny ** 2), ones)]
-        fresp += [(CTT[ls] * nx, nx)]
-        fresp += [(CTT[ls] * ny, ny)]
+    #FIXME: the way to get the l-L part assumes conj. prop. of the weights
+    #FIXME: rffts when possible
 
+
+    rFFT = True
+
+    lside = 2. * np.pi / lminbox
+    npix = int(lmaxbox  / np.pi * lside)
+
+    shape  = (npix, npix)
+    lsides = (lside, lside)
+    rshape = (npix, npix // 2 + 1)
+    fft_shape = rshape if rFFT else shape
+
+    nx = np.outer(np.ones(shape[0]), Freq(np.arange(fft_shape[1]), shape[1]))
+    ny = np.outer(Freq(np.arange(shape[0]), shape[0]), np.ones(fft_shape[1]))
+    ls = np.int_(2 * np.pi * np.sqrt(nx ** 2 + ny ** 2) / lsides[0])
+
+    lmax_seen = np.max(ls) #:FIXME
+    if fftw:
+        def ifft(arr):
+            inpt = pyfftw.byte_align(arr, dtype='complex128')
+            #return pyfftw.interfaces.numpy_fft.irfft2(inpt) if rFFT else pyfftw.interfaces.numpy_fft.ifft2(inpt)
+            outp = pyfftw.empty_aligned(shape, dtype='float64' if rFFT else 'complex128')
+            fft_ob = pyfftw.FFTW(inpt, outp, axes=(0, 1), direction='FFTW_BACKWARD', flags=['FFTW_MEASURE'])
+            fft_ob()
+            return outp
+    else:
+        ifft = np.fft.irfft2 if rFFT else np.fft.ifft2
+
+    vpix = (np.prod(lsides) / np.prod(shape))
+    norm =  0.25 * vpix ** (-2) # overall normalization, using iDFT = Vpix wanted FT's and 1/2 factor in GMV est.
+
+    print('lmin max %s %s ' % (int(2. * np.pi / lsides[0]), lmax_seen) + str(shape))
+
+
+    print(np.min(ls[np.where(ls > 0)]), np.max(ls))
+    CTT = extcl(lmax_seen, cls_grad['tt'])
+    if cpp is None :
+        cls_unl = utils.camb_clfile(os.path.join(CLS, 'FFP10_wdipole_lenspotentialCls.dat'))
+        cpp = cls_unl['pp'][:lmaxphi + 1]
+
+    cpp[lmaxphi + 1:] *= 0.
+    cpp[:lminphi] *= 0.
+
+    XIPP = np.fft.irfft2(extcl(lmax_seen,cpp)[ls[:, 0:rshape[1]]])
+
+    FX = FY = FI = FJ = extcl(lmax_seen, fals['tt'])[ls]
+
+    dL2did = lambda L: int(lsides[0] * L / (2 * np.pi))
+    dnpix2L = lambda npix: 2. * np.pi / lsides[0] * npix
+
+    ones = np.ones(fft_shape, dtype=float)
+    if ks[0] == 'p':
+        fresp = []
+        fresp += [(-CTT[ls] * (nx ** 2 + ny ** 2), ones)]
+        fresp += [(CTT[ls] * 1j * nx, 1j * nx)]
+        fresp += [(CTT[ls] * 1j * ny, 1j * ny)]
         for i in range(3):  # symzation
             fresp += [(fresp[i][1], fresp[i][0])]
-    elif ks == 's':
+
+    elif ks[0] == 's':
         fresp =  [(ones, ones)]
+    elif ks[0] == 'f':
+        fresp = [(ones, CTT[ls])]
+        fresp +=  [(CTT[ls], ones)]
     else:
         assert 0
     if xory == 'x':
@@ -106,26 +135,24 @@ def get_N1pyfftw_XY(npixs, xory='x', ks='p', Laxis=0):
         kA = [(ones, CTT[ls])]
         kA +=  [(CTT[ls], ones)]
         kB = [(ones, CTT[ls])]
-        kB +=  [(CTT[ls], ones)]
+        if use_sym:
+            norm *= 2.
+        else:
+            kB +=  [(CTT[ls], ones)]
 
     else:
+        print('using gl res')
         kA = fresp
         kB = fresp
 
-    ifft2_12 = np.fft.ifft2
-    ifft2_34 = np.fft.ifft2
-    ifft2_43 = np.fft.ifft2
-
-    #oupt = ifft2(inpt)
-    #ifft2 = np.fft.irfft2
     n1_test = np.zeros(len(npixs), dtype=float)
     n1_test_im = np.zeros(len(npixs), dtype=float)
     n1_test1 = np.zeros(len(npixs), dtype=float)
     n1_test2 = np.zeros(len(npixs), dtype=float)
     assert XIPP.shape == shape
     for ip, npix in enumerate(npixs):
-        term1 = np.zeros(shape, dtype=complex)
-        term2 = np.zeros(shape, dtype=complex)
+        term1 = np.zeros(shape, dtype=float if rFFT else complex)
+        term2 = np.zeros(shape, dtype=float if rFFT else complex)
         for wXY in kA:
             for wIJ in kB:
                 for fXI in fresp:
@@ -134,25 +161,31 @@ def get_N1pyfftw_XY(npixs, xory='x', ks='p', Laxis=0):
                     for fYJ in fresp:
                         w2 = wXY[1] * fYJ[0] * FY
                         w4 = wIJ[1] * fYJ[1] * FJ
-                        h12 = ifft2_12(w1 * shiftF(w2, -npix, Laxis).conj())
-                        h34 = ifft2_34(w3 * shiftF(w4,  npix, Laxis).conj())
+                        h12 = ifft(w1 * shiftF(w2, npix, Laxis).conj())
+                        h34 = ifft(w3 * shiftF(w4, -npix, Laxis).conj())
                         term1 += h12 * h34
                 for fXJ in fresp:
                     w1 = wXY[0] * fXJ[0] * FX
                     w4 = wIJ[1] * fXJ[1] * FJ
                     for fYI in fresp:
                         #FIXME: under some cond. not necessary to redo h12
-                        w2 = wXY[1] * fYI[1] * FY
-                        w3 = wIJ[0] * fYI[0] * FI
-                        h12 = ifft2_12(w1 * shiftF(w2, -npix, Laxis).conj())
-                        h43 = ifft2_43(w4 * shiftF(w3,  npix, Laxis).conj())
+                        w2 = wXY[1] * fYI[0] * FY
+                        w3 = wIJ[0] * fYI[1] * FI
+                        h12 = ifft(w1 * shiftF(w2, npix, Laxis).conj())
+                        h43 = ifft(w4 * shiftF(w3,  -npix, Laxis).conj())
                         term2 += h12 * h43
         reim1 = np.sum(XIPP * term1)
         reim2 = np.sum(XIPP * term2)
 
         n1_test[ip] = reim1.real + reim2.real
-        n1_test_im[ip] = reim1.imag + reim2.real
+        n1_test_im[ip] = reim1.imag + reim2.imag
         n1_test1[ip] = reim1.real
         n1_test2[ip] = reim2.real
 
-    return n1_test, n1_test_im, n1_test1, n1_test2, FT, w1, w2, w3, w4
+    Lspix = dnpix2L(npixs) # L corresponding to the given deflections
+    if not spline_result:
+        return norm * n1_test, Lspix, n1_test1, n1_test2
+    else:
+        Lsout = np.arange(0, lmaxphi + 1)
+        return spl(Lspix, norm * n1_test, ext='zeros', k=3, s=0)(Lsout), Lsout, n1_test1, n1_test2
+

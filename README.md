@@ -11,3 +11,10 @@ N1 lensing bias calculation and tests
 * include BB
 
 * better impl. of lik-based estimators
+
+
+
+## Now finally ok for PS with meaningful input Cpp.!
+
+    * pyfftw
+    * symmetries?
