@@ -99,9 +99,9 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
     ones = np.ones(fft_shape, dtype=float)
     if ks[0] == 'p':
         fresp = []
-        fresp += [(CTT[ls] * (nx ** 2 + ny ** 2), ones)]
-        fresp += [(CTT[ls] * nx, nx)]
-        fresp += [(CTT[ls] * ny, ny)]
+        fresp += [(-CTT[ls] * (nx ** 2 + ny ** 2), ones)]
+        fresp += [(CTT[ls] * 1j * nx, 1j * nx)]
+        fresp += [(CTT[ls] * 1j * ny, 1j * ny)]
         for i in range(3):  # symzation
             fresp += [(fresp[i][1], fresp[i][0])]
         norm *= (2 * np.pi / lside) ** 4  # 4 powers of n
@@ -138,8 +138,8 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
 
     else:
         kA  = [(CTT[ls] * (nx ** 2 + ny ** 2), 1.)]
-        kA += [(CTT[ls] * nx, nx)]
-        kA += [(CTT[ls] * ny, ny)]
+        kA += [(-CTT[ls] * 1j * nx, 1j * nx)]
+        kA += [(-CTT[ls] * 1j * ny, 1j * ny)]
         for i in range(3):  # symzation
             kA += [(kA[i][1], kA[i][0])]
         if use_sym:
