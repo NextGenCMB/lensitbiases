@@ -14,7 +14,10 @@ N1 lensing bias calculation and tests
 
 
 
-## Now finally ok for PS with meaningful input Cpp.!
+## Now finally ok for PS with meaningful input aniso source spectrum!
 
     * pyfftw
     * symmetries?
+
+## Status: OK and great for stt, ftt. Garbage testing ptt...
+

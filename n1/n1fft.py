@@ -5,7 +5,7 @@ import plancklens
 from plancklens import utils
 from scipy.interpolate import UnivariateSpline as spl
 from n1.scripts import test2plancklens_1002000 as tp
-
+from n1 import n1 as n1f
 CLS = os.path.join(os.path.dirname(os.path.abspath(plancklens.__file__)), 'data', 'cls')
 
 
@@ -104,7 +104,7 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
         fresp += [(CTT[ls] * ny, ny)]
         for i in range(3):  # symzation
             fresp += [(fresp[i][1], fresp[i][0])]
-        norm *= (2 * np.pi / lside) ** 2
+        norm *= (2 * np.pi / lside) ** 4  # 4 powers of n
 
     elif ks[0] == 's':
         fresp =  [(ones, ones)]
@@ -137,17 +137,27 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
             kB +=  [[CTT[ls], 1.]]
 
     else:
-        kA = fresp
-        kB = fresp
+        kA  = [(CTT[ls] * (nx ** 2 + ny ** 2), 1.)]
+        kA += [(CTT[ls] * nx, nx)]
+        kA += [(CTT[ls] * ny, ny)]
+        for i in range(3):  # symzation
+            kA += [(kA[i][1], kA[i][0])]
+        if use_sym:
+            kB = kA[:len(kA) // 2]
+            norm *= 2.
+            use_sym = False
+        else:
+            kB = kA
+        norm *= (2 * np.pi / lside) ** 4 # 4 powers of n (2 for kA, 2 for kB)
 
     fresp2 = fresp
     if use_sym and len(fresp) > 1:
-        norm *= 2
+        norm *= 2.
         print(len(fresp))
         fresp2 = fresp[::len(fresp) // 2]
     # Weigthing by filters:
     FX = FY = FI = FJ = extcl(lmax_seen, fals['tt'])[ls]
-    #for WXY in kA:
+    #for WXY in kA: # This modifies the arrays so change tuple to list and be careful
     #    WXY[0] *= FX
     #    WXY[1] *= FY
     #for WIJ in kB:
@@ -193,8 +203,25 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
 
     Lspix = dnpix2L(npixs) # L corresponding to the given deflections
     if not spline_result:
-        return norm * n1_test, Lspix, n1_test1, n1_test2
+        return norm * n1_test, Lspix, term1, term2
     else:
         Lsout = np.arange(0, lmaxphi + 1)
-        return spl(Lspix, norm * n1_test, ext='zeros', k=3, s=0)(Lsout), Lsout, n1_test1, n1_test2
+        return spl(Lspix, norm * n1_test, ext='zeros', k=3, s=0)(Lsout), Lsout, term1, term2
 
+def get_n1f(L, kA, ks, lminphi, lmaxphi, cpp=None, dL=30):
+    kB = kA
+    fals = tp.get_fal_sTP('PL', 1)[1]
+    ftlA = felA =  fblA = ftlB = felB = fblB = np.copy(fals['tt'])
+    lminA = 100
+    lminB = 100
+    if cpp is None:
+        cpp = utils.camb_clfile(os.path.join(CLS, 'FFP10_wdipole_lenspotentialCls.dat'))['pp']
+    cpp = cpp[:lmaxphi + 1]
+    cpp[:lminphi] *= 0.
+    lps = n1f.library_n1._default_lps_grid(lmaxphi)
+    cls_grad = utils.camb_clfile(os.path.join(CLS, 'FFP10_wdipole_gradlensedCls.dat'))
+    cltt = clttw = cls_grad['tt']
+    clte = cltew = cls_grad['te']
+    clee = cleew = cls_grad['ee']
+    return n1f._calc_n1L_sTP(L, cpp, kA, kB, ks, cltt, clte, clee, clttw, cltew, cleew,
+                          ftlA, felA, fblA, ftlB, felB, fblB, lminA, lminB, dL, lps)
