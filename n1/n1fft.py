@@ -54,21 +54,20 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
     #FIXME: rffts when possible
 
 
-    rFFT = True
+    rFFT = False
 
     lside = 2. * np.pi / lminbox
     npix = int(lmaxbox  / np.pi * lside)
-
+    if npix % 2 == 1: npix += 1
     shape  = (npix, npix)
-    lsides = (lside, lside)
     rshape = (npix, npix // 2 + 1)
     fft_shape = rshape if rFFT else shape
 
     nx = np.outer(np.ones(shape[0]), Freq(np.arange(fft_shape[1]), shape[1]))
     ny = np.outer(Freq(np.arange(shape[0]), shape[0]), np.ones(fft_shape[1]))
-    ls = np.int_(2 * np.pi * np.sqrt(nx ** 2 + ny ** 2) / lsides[0])
+    ls = np.int_(2 * np.pi * np.sqrt(nx ** 2 + ny ** 2) / lside)
+    lmax_seen = ls[npix // 2, npix // 2]
 
-    lmax_seen = np.max(ls) #:FIXME
     if fftw:
         def ifft(arr):
             inpt = pyfftw.byte_align(arr, dtype='complex128')
@@ -80,13 +79,9 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
     else:
         ifft = np.fft.irfft2 if rFFT else np.fft.ifft2
 
-    vpix = (np.prod(lsides) / np.prod(shape))
-    norm =  0.25 * vpix ** (-2) # overall normalization, using iDFT = Vpix wanted FT's and 1/2 factor in GMV est.
+    norm = 0.25 * (npix / lside) ** 4
 
-    print('lmin max %s %s ' % (int(2. * np.pi / lsides[0]), lmax_seen) + str(shape))
-
-
-    print(np.min(ls[np.where(ls > 0)]), np.max(ls))
+    print('lmin max %s %s ' % (int(2. * np.pi / lside), lmax_seen) + str(shape))
     CTT = extcl(lmax_seen, cls_grad['tt'])
     if cpp is None :
         cls_unl = utils.camb_clfile(os.path.join(CLS, 'FFP10_wdipole_lenspotentialCls.dat'))
@@ -94,13 +89,12 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
 
     cpp[lmaxphi + 1:] *= 0.
     cpp[:lminphi] *= 0.
-
-    XIPP = np.fft.irfft2(extcl(lmax_seen,cpp)[ls[:, 0:rshape[1]]])
+    xipp = np.fft.irfft2(extcl(lmax_seen,cpp)[ls if rFFT else ls[:, 0:rshape[1]]])
 
     FX = FY = FI = FJ = extcl(lmax_seen, fals['tt'])[ls]
 
-    dL2did = lambda L: int(lsides[0] * L / (2 * np.pi))
-    dnpix2L = lambda npix: 2. * np.pi / lsides[0] * npix
+    dL2did = lambda L: int(lside * L / (2 * np.pi))
+    dnpix2L = lambda n: 2. * np.pi / lside * n
 
     ones = np.ones(fft_shape, dtype=float)
     if ks[0] == 'p':
@@ -135,7 +129,7 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
         kA = [(ones, CTT[ls])]
         kA +=  [(CTT[ls], ones)]
         kB = [(ones, CTT[ls])]
-        if use_sym:
+        if use_sym: #FIXME: figure out better the symmetries that can be used
             norm *= 2.
         else:
             kB +=  [(CTT[ls], ones)]
@@ -149,7 +143,7 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
     n1_test_im = np.zeros(len(npixs), dtype=float)
     n1_test1 = np.zeros(len(npixs), dtype=float)
     n1_test2 = np.zeros(len(npixs), dtype=float)
-    assert XIPP.shape == shape
+
     for ip, npix in enumerate(npixs):
         term1 = np.zeros(shape, dtype=float if rFFT else complex)
         term2 = np.zeros(shape, dtype=float if rFFT else complex)
@@ -174,8 +168,8 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
                         h12 = ifft(w1 * shiftF(w2, npix, Laxis).conj())
                         h43 = ifft(w4 * shiftF(w3,  -npix, Laxis).conj())
                         term2 += h12 * h43
-        reim1 = np.sum(XIPP * term1)
-        reim2 = np.sum(XIPP * term2)
+        reim1 = np.sum(xipp * term1)
+        reim2 = np.sum(xipp * term2)
 
         n1_test[ip] = reim1.real + reim2.real
         n1_test_im[ip] = reim1.imag + reim2.imag
