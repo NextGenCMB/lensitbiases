@@ -137,7 +137,6 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
             kB +=  [[CTT[ls], 1.]]
 
     else:
-        print('using gl res')
         kA = fresp
         kB = fresp
 
@@ -148,12 +147,12 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
         fresp2 = fresp[::len(fresp) // 2]
     # Weigthing by filters:
     FX = FY = FI = FJ = extcl(lmax_seen, fals['tt'])[ls]
-    for WXY in kA:
-        WXY[0] *= FX
-        WXY[1] *= FY
-    for WIJ in kB:
-        WIJ[0] *= FI
-        WIJ[1] *= FJ
+    #for WXY in kA:
+    #    WXY[0] *= FX
+    #    WXY[1] *= FY
+    #for WIJ in kB:
+    #    WIJ[0] *= FI
+    #    WIJ[1] *= FJ
 
     n1_test = np.zeros(len(npixs), dtype=float)
     n1_test_im = np.zeros(len(npixs), dtype=float)
@@ -166,21 +165,21 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
         for wXY in kA:
             for wIJ in kB:
                 for fXI in fresp:
-                    w1 = wXY[0] * fXI[0]
-                    w3 = wIJ[0] * fXI[1]
+                    w1 = wXY[0] * fXI[0] * FX
+                    w3 = wIJ[0] * fXI[1] * FI
                     for fYJ in fresp2:
-                        w2 = wXY[1] * fYJ[0]
-                        w4 = wIJ[1] * fYJ[1]
+                        w2 = wXY[1] * fYJ[0]* FY
+                        w4 = wIJ[1] * fYJ[1]* FJ
                         h12 = ifft(w1 * shiftF(w2, npix, Laxis).conj())
                         h34 = ifft(w3 * shiftF(w4, -npix, Laxis).conj())
                         term1 += h12 * h34
                 for fXJ in fresp:
-                    w1 = wXY[0] * fXJ[0]
-                    w4 = wIJ[1] * fXJ[1]
+                    w1 = wXY[0] * fXJ[0]* FX
+                    w4 = wIJ[1] * fXJ[1]* FJ
                     for fYI in fresp2:
                         #FIXME: under some cond. not necessary to redo h12
-                        w2 = wXY[1] * fYI[0]
-                        w3 = wIJ[0] * fYI[1]
+                        w2 = wXY[1] * fYI[0] * FY
+                        w3 = wIJ[0] * fYI[1] * FI
                         h12 = ifft(w1 * shiftF(w2, npix, Laxis).conj())
                         h43 = ifft(w4 * shiftF(w3,  -npix, Laxis).conj())
                         term2 += h12 * h43
