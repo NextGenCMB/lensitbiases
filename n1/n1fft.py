@@ -55,6 +55,7 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
 
 
     rFFT = False
+    assert not rFFT, 'check carefully implications'
 
     lside = 2. * np.pi / lminbox
     npix = int(lmaxbox  / np.pi * lside)
@@ -62,10 +63,11 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
     shape  = (npix, npix)
     rshape = (npix, npix // 2 + 1)
     fft_shape = rshape if rFFT else shape
+    norm = 0.25 * (npix / lside) ** 4 #overall final normalization
 
     nx = np.outer(np.ones(shape[0]), Freq(np.arange(fft_shape[1]), shape[1]))
     ny = np.outer(Freq(np.arange(shape[0]), shape[0]), np.ones(fft_shape[1]))
-    ls = np.int_(2 * np.pi * np.sqrt(nx ** 2 + ny ** 2) / lside)
+    ls = np.int_(np.round(2 * np.pi * np.sqrt(nx ** 2 + ny ** 2) / lside))
     lmax_seen = ls[npix // 2, npix // 2]
 
     if fftw:
@@ -79,7 +81,6 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
     else:
         ifft = np.fft.irfft2 if rFFT else np.fft.ifft2
 
-    norm = 0.25 * (npix / lside) ** 4
 
     print('lmin max %s %s ' % (int(2. * np.pi / lside), lmax_seen) + str(shape))
     CTT = extcl(lmax_seen, cls_grad['tt'])
@@ -91,7 +92,6 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
     cpp[:lminphi] *= 0.
     xipp = np.fft.irfft2(extcl(lmax_seen,cpp)[ls if rFFT else ls[:, 0:rshape[1]]])
 
-    FX = FY = FI = FJ = extcl(lmax_seen, fals['tt'])[ls]
 
     dL2did = lambda L: int(lside * L / (2 * np.pi))
     dnpix2L = lambda n: 2. * np.pi / lside * n
@@ -99,11 +99,12 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
     ones = np.ones(fft_shape, dtype=float)
     if ks[0] == 'p':
         fresp = []
-        fresp += [(-CTT[ls] * (nx ** 2 + ny ** 2), ones)]
-        fresp += [(CTT[ls] * 1j * nx, 1j * nx)]
-        fresp += [(CTT[ls] * 1j * ny, 1j * ny)]
+        fresp += [(CTT[ls] * (nx ** 2 + ny ** 2), ones)]
+        fresp += [(CTT[ls] * nx, nx)]
+        fresp += [(CTT[ls] * ny, ny)]
         for i in range(3):  # symzation
             fresp += [(fresp[i][1], fresp[i][0])]
+        norm *= (2 * np.pi / lside) ** 2
 
     elif ks[0] == 's':
         fresp =  [(ones, ones)]
@@ -113,31 +114,46 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
     else:
         assert 0
     if xory == 'x':
-        kA = [(ones, 1j * nx * CTT[ls])]  # input QE A
-        kB = [(ones, 1j * nx * CTT[ls])]  # input QE B
+        kA = [ [1., 1j * nx * CTT[ls]] ]  # input QE A
+        kB = [ [1., 1j * nx * CTT[ls]] ]  # input QE B
 
     elif xory == 'y':
-        kA = [(ones,  1j * ny * CTT[ls])]  # input QE A
-        kB = [(ones,  1j * ny * CTT[ls])]  # input QE B
+        kA = [[1.,  1j * ny * CTT[ls]]]  # input QE A
+        kB = [[1.,  1j * ny * CTT[ls]]]  # input QE B
     elif xory == 'xy':
-        kA = [(ones, 1j * nx * CTT[ls])]  # input QE A
-        kB = [(ones, 1j * ny * CTT[ls])]  # input QE B
+        kA = [[1., 1j * nx * CTT[ls]]]  # input QE A
+        kB = [[1., 1j * ny * CTT[ls]]]  # input QE B
     elif xory == 'stt':
-        kA = [(ones, ones)]
-        kB = [(ones, ones)]
+        kA = [[1., 1.]]
+        kB = [[1., 1.]]
     elif xory == 'ftt':
-        kA = [(ones, CTT[ls])]
-        kA +=  [(CTT[ls], ones)]
-        kB = [(ones, CTT[ls])]
+        kA = [[1., CTT[ls]]]
+        kA +=  [[CTT[ls], 1.]]
+        kB = [[1., CTT[ls]]]
         if use_sym: #FIXME: figure out better the symmetries that can be used
             norm *= 2.
+            use_sym = False
         else:
-            kB +=  [(CTT[ls], ones)]
+            kB +=  [[CTT[ls], 1.]]
 
     else:
         print('using gl res')
         kA = fresp
         kB = fresp
+
+    fresp2 = fresp
+    if use_sym and len(fresp) > 1:
+        norm *= 2
+        print(len(fresp))
+        fresp2 = fresp[::len(fresp) // 2]
+    # Weigthing by filters:
+    FX = FY = FI = FJ = extcl(lmax_seen, fals['tt'])[ls]
+    for WXY in kA:
+        WXY[0] *= FX
+        WXY[1] *= FY
+    for WIJ in kB:
+        WIJ[0] *= FI
+        WIJ[1] *= FJ
 
     n1_test = np.zeros(len(npixs), dtype=float)
     n1_test_im = np.zeros(len(npixs), dtype=float)
@@ -150,21 +166,21 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
         for wXY in kA:
             for wIJ in kB:
                 for fXI in fresp:
-                    w1 = wXY[0] * fXI[0] * FX
-                    w3 = wIJ[0] * fXI[1] * FI
-                    for fYJ in fresp:
-                        w2 = wXY[1] * fYJ[0] * FY
-                        w4 = wIJ[1] * fYJ[1] * FJ
+                    w1 = wXY[0] * fXI[0]
+                    w3 = wIJ[0] * fXI[1]
+                    for fYJ in fresp2:
+                        w2 = wXY[1] * fYJ[0]
+                        w4 = wIJ[1] * fYJ[1]
                         h12 = ifft(w1 * shiftF(w2, npix, Laxis).conj())
                         h34 = ifft(w3 * shiftF(w4, -npix, Laxis).conj())
                         term1 += h12 * h34
                 for fXJ in fresp:
-                    w1 = wXY[0] * fXJ[0] * FX
-                    w4 = wIJ[1] * fXJ[1] * FJ
-                    for fYI in fresp:
+                    w1 = wXY[0] * fXJ[0]
+                    w4 = wIJ[1] * fXJ[1]
+                    for fYI in fresp2:
                         #FIXME: under some cond. not necessary to redo h12
-                        w2 = wXY[1] * fYI[0] * FY
-                        w3 = wIJ[0] * fYI[1] * FI
+                        w2 = wXY[1] * fYI[0]
+                        w3 = wIJ[0] * fYI[1]
                         h12 = ifft(w1 * shiftF(w2, npix, Laxis).conj())
                         h43 = ifft(w4 * shiftF(w3,  -npix, Laxis).conj())
                         term2 += h12 * h43
