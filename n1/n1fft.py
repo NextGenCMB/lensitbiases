@@ -65,8 +65,13 @@ def get_N1pyfftw_XY(npixs, fals, cls_grad, xory='x', ks='p', Laxis=0,
     fft_shape = rshape if rFFT else shape
     norm = 0.25 * (npix / lside) ** 4 #overall final normalization
 
-    nx = np.outer(np.ones(shape[0]), Freq(np.arange(fft_shape[1]), shape[1]))
-    ny = np.outer(Freq(np.arange(shape[0]), shape[0]), np.ones(fft_shape[1]))
+    #=== frequencies
+    nx = Freq(np.arange(fft_shape[1]), shape[1])
+    ny = Freq(np.arange(shape[0]), shape[0])
+    nx[shape[1] // 2:] *= -1
+    ny[shape[0] // 2:] *= -1
+    nx = np.outer(np.ones(shape[0]), nx)
+    ny = np.outer(ny, np.ones(fft_shape[1]))
     ls = np.int_(np.round(2 * np.pi * np.sqrt(nx ** 2 + ny ** 2) / lside))
     lmax_seen = ls[npix // 2, npix // 2]
 

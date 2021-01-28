@@ -19,5 +19,5 @@ N1 lensing bias calculation and tests
     * pyfftw
     * symmetries?
 
-## Status: OK and great for stt, ftt. Garbage testing ptt...
+## Status: OK and great for stt, ftt. Ahh! for ptt trick was freq signs...
 
