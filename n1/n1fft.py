@@ -230,7 +230,6 @@ class n1_ptt:
         shape = (npix, npix)
         rshape = (npix, npix // 2 + 1)
         fft_shape = rshape if rFFT else shape
-        norm = 0.25 * (npix / lside) ** 4  # overall final normalization
 
         # === frequencies
         nx = Freq(np.arange(fft_shape[1]), shape[1])  # unsigned FFT frequencies
@@ -244,8 +243,6 @@ class n1_ptt:
         ls = self.freq2ls(nx, ny)
         lmax_seen = ls[npix // 2, npix // 2]
 
-        self.iny = 1j * ny
-        self.inx = 1j * nx
         self.shape = shape
 
         if cpp is None:
@@ -265,8 +262,8 @@ class n1_ptt:
         self.F = extcl(lmax_spec , fals['tt'])  # + 1 because of shifted freq. boxes
         self.ctt = extcl(lmax_spec, cls_grad['tt'])
 
-        self.ctt_mat = extcl(lmax_spec , cls_grad['tt'])[ls]
-        self.Ft_mat = extcl(lmax_spec, fals['tt'])[ls]
+        #self.ctt_mat = extcl(lmax_spec , cls_grad['tt'])[ls]
+        #self.Ft_mat = extcl(lmax_spec, fals['tt'])[ls]
 
         self.ls = ls
 
@@ -398,7 +395,7 @@ class n1_ptt:
                 Laxis(optional, 0 or 1): Axis towards which L is pointing. (For testing purposes, result should be independent of this)
 
             Returns:
-                gradient-induced, lensing gradient or curl :math:`N_L^{(1)}`
+                gradient-induced, lensing gradient or curl bias :math:`N_L^{(1)}`
 
 
         """
@@ -430,10 +427,10 @@ class n1_ptt:
         return self.norm * n1 * (dl /self.lminbox) ** 2
 
 
-def get_n1f(L, kA, ks, lminphi, lmaxphi, cls_grad, cpp=None, dL=30):
+def get_n1f(L, kA, ks, lminphi, lmaxphi, cls_grad, cpp=None, dL=30, exp='PL', lps=None):
     """Call to f90 4-dimensional integral code """
     kB = kA
-    fals = tp.get_fal_sTP('PL', 1)[1]
+    fals = tp.get_fal_sTP(exp, 1)[1]
     ftlA = felA =  fblA = ftlB = felB = fblB = np.copy(fals['tt'])
     lminA = 100
     lminB = 100
@@ -441,7 +438,8 @@ def get_n1f(L, kA, ks, lminphi, lmaxphi, cls_grad, cpp=None, dL=30):
         cpp = utils.camb_clfile(os.path.join(CLS, 'FFP10_wdipole_lenspotentialCls.dat'))['pp']
     cpp = cpp[:lmaxphi + 1]
     cpp[:lminphi] *= 0.
-    lps = n1f.library_n1._default_lps_grid(lmaxphi)
+    if lps is None:
+        lps = n1f.library_n1._default_lps_grid(lmaxphi)
     cltt = clttw = cls_grad['tt']
     clte = cltew = cls_grad['te']
     clee = cleew = cls_grad['ee']

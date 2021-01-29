@@ -66,8 +66,13 @@ For spin-0 QE's and anisotropy sources this is particularly simple. For lensing 
 
 \subsection{method for lensing gradient}
 \begin{itemize}
-\item All the scalar products in the gradient responses can be absorbed within $C^{\phi \phi}$ turning it into a sum over $\xi^{\alpha_a \alpha_b}(\br)$ against very simple weight functions $(i \bl^\alpha _1 C_{l_1} +i \bl'^\alpha _1 C_{l'_1} )_\alpha(i \bl_2 C_{l_2} +i \bl'_2 C_{l'_2} )_\beta$.
+\item All the scalar products in the gradient responses can be absorbed within $C^{\phi \phi}$ turning it into a sum over $\xi^{\alpha_a \alpha_b}(\br)$ against very simple weight functions $(i \bl^\alpha _1 C_{l_1} +i \bl'^\alpha _1 C_{l'_1} )_\alpha(i \bl_2 C_{l_2} +i \bl'_2 C_{l'_2} )_\beta$ of the deflection vector.
 \item The deflection QE is of the same form, and it is enough to take $L_x^2\cdot <d_x d_x>$ for the gradient and $L_x^2<d_yd_y>$ for the curl (curl, but still lensing gradient-induced bias)
+\item All terms become proportional to terms like
+\begin{equation}
+	g^{ij}_{L,(\alpha.. , \beta...)} \equiv \int \frac{d\bl_1}{(2\pi)^2} F_{\bl_1}F_{\bl_2} C_{l_1}^{i}C_{l_2}^{j}(i \bl_1)_{\alpha} \cdots(i \bl_2)_{\beta} e^{i \bl_1 \cdot \br} 
+\end{equation}
+where $\bl_1 + \bl_2 = \bll$. Further considerations of symmetries etc reduces the number of terms to compute.
 \end{itemize}
 
 \subsection{curved-sky}
