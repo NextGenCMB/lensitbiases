@@ -292,6 +292,12 @@ class n1_ptt:
 
 
     def get_shifted_lylx(self, L, Laxis):
+        """Builds frequency maps shifted by L
+
+            Returns:
+                frequency maps k_y - L_y, k_x - L_x
+
+        """
         nLs = L / self.lminbox
         iL, dL = (int(np.round(nLs)), nLs - int(np.round(nLs)))
         fL = np.roll(self.ns[Laxis], iL, axis=Laxis)  # rolling with positive L is taking l - L
@@ -314,6 +320,9 @@ class n1_ptt:
         return ret
 
     def freq2ls(self, nx, ny):
+        """Maps flat-sky frequencies onto integer multipoles
+
+        """
         return np.int_(np.round(self.lminbox * np.sqrt(nx ** 2 + ny ** 2)))
 
     def get_g(self, dlpix, pi, pj, ders_i, ders_j, Laxis=0):
@@ -352,76 +361,77 @@ class n1_ptt:
             wj *= nynx[der_j]
         return np.fft.ifft2(wi * wj.conj())
 
-    def get_n1(self, dl):
-        c = d = 0
+    def _get_n1(self, dl, gorc='g'):
+        r"""N1 lensing bias without using symmetry tricks
+
+            Note:
+                here the input argument is in pixel units
+
+        """
+        c = d = 0 if gorc == 'g' else 1
         ret_re = 0.
         for a in [0, 1]:
             for b in [0, 1]:
-                term1 = self.get_g(dl, 2, 1, [a, c], [b]) * self.get_g(-dl, 1, 0, [d], [])
-                term1 += self.get_g(dl, 2, 0, [a, c], []) * self.get_g(-dl, 1, 1, [d], [b])
-                term1 += self.get_g(dl, 1, 1, [c], [b]) * self.get_g(-dl, 2, 0, [d, a], [])
-                term1 += self.get_g(dl, 1, 0, [c], []) * self.get_g(-dl, 2, 1, [d, a], [b])
+                term1  = self.get_g(dl, 2, 1, [a, c], [b]) * self.get_g(-dl, 1, 0, [d],    [])
+                term1 += self.get_g(dl, 2, 0, [a, c], [])  * self.get_g(-dl, 1, 1, [d],    [b])
+                term1 += self.get_g(dl, 1, 1, [c],    [b]) * self.get_g(-dl, 2, 0, [d, a], [])
+                term1 += self.get_g(dl, 1, 0, [c],    [])  * self.get_g(-dl, 2, 1, [d, a], [b])
 
                 ret_re += np.sum(self.xiab[a + b] * term1.real)
 
-                term2 = self.get_g(dl, 2, 1, [a, c], [b]) * self.get_g(-dl, 0, 1, [], [d])
-                term2 += self.get_g(dl, 2, 0, [a, c], []) * self.get_g(-dl, 0, 2, [], [b, d])
-                term2 += self.get_g(dl, 1, 1, [c], [b]) * self.get_g(-dl, 1, 1, [a], [d])
-                term2 += self.get_g(dl, 1, 0, [c], []) * self.get_g(-dl, 1, 2, [a], [d, b])
+                term2 =  self.get_g(dl, 2, 1, [a, c], [b]) * self.get_g(-dl, 0, 1,  [],  [d])
+                term2 += self.get_g(dl, 2, 0, [a, c], []) * self.get_g(-dl, 0, 2,   [],  [b, d])
+                term2 += self.get_g(dl, 1, 1, [c],    [b]) * self.get_g(-dl, 1, 1, [a],  [d])
+                term2 += self.get_g(dl, 1, 0, [c],    []) * self.get_g(-dl, 1, 2,  [a],  [d, b])
 
                 ret_re += np.sum(self.xiab[a + b] * term2.real)
 
         return self.norm * ret_re * dl ** 2
 
-    def get_n1_optimized(self, dl, Laxis=0):
-        # Trying to make futher use of the symmetries
-        # Default axis 1 for C-ordering
-        c = d = Laxis
-        ret_re = 0.
-        twice_gm_10_d_z_plus_gm_01_z_d = 2. * (self.get_g(-dl, 1, 0, [d], [], Laxis=Laxis) + self.get_g(-dl, 0, 1, [], [d], Laxis=Laxis))
-        gp_20_ac_z = [self.get_g(dl, 2, 0, [a, c], [], Laxis=Laxis) for a in [0, 1]]
-        # probably still some redundancy here with the g11's
-        twice_gm_11_d_b_plus_gm_02_z_bd =  [2 * self.get_g(-dl, 1, 1, [d], [b], Laxis=Laxis) + self.get_g(-dl, 0, 2, [], [b, d], Laxis=Laxis) for b in [0, 1]]
-        gp_11_c_b =  [self.get_g(dl, 1, 1, [c], [b], Laxis=Laxis) for b in [0, 1]]
-        gm_11_a_d =  [self.get_g(-dl, 1, 1, [a], [d], Laxis=Laxis) for a in [0, 1]]
-        for a in [0, 1]:
-            for b in [0, 1]:
-                term =  (self.get_g(dl, 2, 1, [a, c], [b], Laxis=Laxis) * twice_gm_10_d_z_plus_gm_01_z_d).real
-                term += (gp_20_ac_z[a] * twice_gm_11_d_b_plus_gm_02_z_bd [b]).real
-                term += (gp_11_c_b[b] * gm_11_a_d[a]).real
-                ret_re += np.sum(self.xiab[a + b] * term)
 
-        return self.norm * ret_re * dl ** 2
+    def get_n1(self, L, gorc='g', Laxis=0):
+        r"""N1 lensing gradient-induced lensing bias, for lensing gradient or curl bias
 
-    def get_n1_optimized_anyL(self, L, Laxis=0):
-        # Trying to make futher use of the symmetries
-        # Default axis 1 for C-ordering
-        assert L >= 0
-        c = d = Laxis
-        ret_re = 0.
+            Args:
+                L: multipole L of :math:`N^{(1)}_L`
+                gorc: return gradient or curl N^{(1)}
+                Laxis(optional, 0 or 1): Axis towards which L is pointing. (For testing purposes, result should be independent of this)
+
+            Returns:
+                gradient-induced, lensing gradient or curl :math:`N_L^{(1)}`
+
+
+        """
+        c = d = (Laxis if gorc == 'g' else (1 - Laxis)) # only change to do for curl
+        n1 = 0.
         dl = L
+
+        #--- Builds shifted frequency grids for feeding into the FFT's
         self.shifted_p_nynx = self.get_shifted_lylx( L, Laxis)
         self.shifted_m_nynx = self.get_shifted_lylx(-L, Laxis)
         self.shifted_p_ls = self.freq2ls(self.shifted_p_nynx[1], self.shifted_p_nynx[0])
         self.shifted_m_ls = self.freq2ls(self.shifted_m_nynx[1], self.shifted_m_nynx[0])
 
+        #--- precalc of fft'ed maps:(probably still some redundancy here with the g11's)
         twice_gm_10_d_z_plus_gm_01_z_d = 2. * (self.get_g_anyL(-dl, 1, 0, [d], [], Laxis=Laxis) + self.get_g_anyL(-dl, 0, 1, [], [d], Laxis=Laxis))
         gp_20_ac_z = [self.get_g_anyL(dl, 2, 0, [a, c], [], Laxis=Laxis) for a in [0, 1]]
-        # probably still some redundancy here with the g11's
         twice_gm_11_d_b_plus_gm_02_z_bd =  [2 * self.get_g_anyL(-dl, 1, 1, [d], [b], Laxis=Laxis) + self.get_g_anyL(-dl, 0, 2, [], [b, d], Laxis=Laxis) for b in [0, 1]]
         gp_11_c_b =  [self.get_g_anyL(dl, 1, 1, [c], [b], Laxis=Laxis) for b in [0, 1]]
         gm_11_a_d =  [self.get_g_anyL(-dl, 1, 1, [a], [d], Laxis=Laxis) for a in [0, 1]]
+
+        #--- Loop over cartesian deflection field components
         for a in [0, 1]:
             for b in [0, 1]:
                 term =  (self.get_g_anyL(dl, 2, 1, [a, c], [b], Laxis=Laxis) * twice_gm_10_d_z_plus_gm_01_z_d).real
                 term += (gp_20_ac_z[a] * twice_gm_11_d_b_plus_gm_02_z_bd [b]).real
                 term += (gp_11_c_b[b] * gm_11_a_d[a]).real
-                ret_re += np.sum(self.xiab[a + b] * term)
+                n1 += np.sum(self.xiab[a + b] * term)
 
-        return self.norm * ret_re * (dl /self.lminbox) ** 2
+        return self.norm * n1 * (dl /self.lminbox) ** 2
 
 
 def get_n1f(L, kA, ks, lminphi, lmaxphi, cls_grad, cpp=None, dL=30):
+    """Call to f90 4-dimensional integral code """
     kB = kA
     fals = tp.get_fal_sTP('PL', 1)[1]
     ftlA = felA =  fblA = ftlB = felB = fblB = np.copy(fals['tt'])

@@ -64,11 +64,11 @@ Thus, the cost of one of these terms is that a couple of FFT's per $L$. Creating
 It looks like the FFTs of the resolution necessary for similar sampling than my current code ($\sim 1 $sec unthreaded per TT lensing term) might correspond to boxes of 64 pixels, which gives me sub-milliseconds python FFT's. 
 For spin-0 QE's and anisotropy sources this is particularly simple. For lensing the deflection vector QE's are indeed all separable, but there is a number of terms owing to the two components and is some algebraic mess. One very simple test to just check could be the use the vector form in the QE but the lensing gradient response with 6 fully separable terms. This would lead to $\sim 6 \times 6 \times 3$ such operations?
 
-Checks: for the PS-like estimator, with $f = W = 1$, we must have
-\begin{equation}
-	N_L^{(1)} = 2 \int d\br \:\xi^{\phi\phi}(\br) |h_{\bll}^2(\br)|
-\end{equation}
-PROBLEM: For some weightfunctions this seems to super-dependent on the lowest anisotropy source $Cl$
+\subsection{method for lensing gradient}
+\begin{itemize}
+\item All the scalar products in the gradient responses can be absorbed within $C^{\phi \phi}$ turning it into a sum over $\xi^{\alpha_a \alpha_b}(\br)$ against very simple weight functions $(i \bl^\alpha _1 C_{l_1} +i \bl'^\alpha _1 C_{l'_1} )_\alpha(i \bl_2 C_{l_2} +i \bl'_2 C_{l'_2} )_\beta$.
+\item The deflection QE is of the same form, and it is enough to take $L_x^2\cdot <d_x d_x>$ for the gradient and $L_x^2<d_yd_y>$ for the curl (curl, but still lensing gradient-induced bias)
+\end{itemize}
 
 \subsection{curved-sky}
 On the curved-sky (for spin-0 fields only) one get something similar-looking:
