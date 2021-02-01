@@ -34,6 +34,7 @@
 \newcommand{\intL}{\int_{\substack{\bl_1 + \bl_2 \\ =\bll }}}
 \newcommand{\intLp}{\int_{\substack{\bl'_1 + \bl'_2 \\ =\bll' }}}
 
+\newcommand{\cred}[1]{\color{red} {#1} \color{black}}
 \begin{equation}
 \begin{split}
 N^{(1)}(L) = &\intL \intLp \Xi_{ij}(\bl_1, \bl_2) \Xi_{pq}(\bl'_1, \bl'_2) \\ &\times\left[ C^{\phi \phi}_{|\bl_1+\bl'_1|}f_{ip}(\bl_1, \bl'_1) f_{jq}(\bl_2, \bl'_2) + C^{\phi \phi}_{|\bl_1+\bl'_2|}f_{iq}(\bl_1, \bl'_2) f_{jp}(\bl_2, \bl'_1) \right] ,
@@ -72,9 +73,18 @@ For spin-0 QE's and anisotropy sources this is particularly simple. For lensing 
 \begin{equation}
 	g^{ij}_{L,(\alpha.. , \beta...)} \equiv \int \frac{d\bl_1}{(2\pi)^2} F_{\bl_1}F_{\bl_2} C_{l_1}^{i}C_{l_2}^{j}(i \bl_1)_{\alpha} \cdots(i \bl_2)_{\beta} e^{i \bl_1 \cdot \br} 
 \end{equation}
-where $\bl_1 + \bl_2 = \bll$. Further considerations of symmetries etc reduces the number of terms to compute.
+where $\bl_1 + \bl_2 = \bll$. (can get something possibly more sensible by going to $l+L,l-L$)Further considerations of symmetries etc reduces the number of terms to compute.
 \end{itemize}
+\cred{Much better: can keep $W^{XY}$ and $W^{IJ}$ fully intact (nd symmetric), needs then only three terms in the responses per $xy$ and derivatives might simplify as well, check this!}
 
+This gives:
+\begin{equation}\boxed{
+ \int d\br \:	\xi^{\alpha \beta}(\br) \left[2g^{(11)}_{\bll, (\alpha, \beta)}(\br)g^{(00)}_{-\bll,(0,0)}(\br) + 2 g^{(10)}_{\bll, (\alpha,)}(\br)g^{(01)}_{-\bll,(,\beta)}(\br)\right]}
+\end{equation}
+with
+\begin{equation}
+	g^{ij}_{\bll, (\alpha, \beta)}(\br) = \intL W^{TT}(\bl_1,\bl_2) (i C_{l_1}\bl_1)_{\alpha} (i C_{l_2}\bl_2)_{\beta} e^{i \bl_1 \cdot \br}
+\end{equation}
 \subsection{curved-sky}
 On the curved-sky (for spin-0 fields only) one get something similar-looking:
 \begin{equation}

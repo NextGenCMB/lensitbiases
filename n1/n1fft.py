@@ -236,6 +236,9 @@ class n1_ptt:
         ny = Freq(np.arange(shape[0]), shape[0])
         nx[shape[1] // 2:] *= -1
         ny[shape[0] // 2:] *= -1
+        self.nx_1d = nx.copy()
+        self.ny_1d = ny.copy()
+
         nx = np.outer(np.ones(shape[0]), nx)
         ny = np.outer(ny, np.ones(fft_shape[1]))
         self.lminbox = lminbox
@@ -244,7 +247,8 @@ class n1_ptt:
         lmax_seen = ls[npix // 2, npix // 2]
 
         self.shape = shape
-
+        self._wTT_pL = None
+        self._wTT_mL = None
         if cpp is None:
             cls_unl = utils.camb_clfile(os.path.join(CLS, 'FFP10_wdipole_lenspotentialCls.dat'))
             cpp = cls_unl['pp'][:lmaxphi + 1]
@@ -271,8 +275,7 @@ class n1_ptt:
         self.lside = lside
 
         norm = (npix / self.lside) ** 4  # overall final normalization
-        norm *= (float(
-            lminbox)) ** 8  # always 2 powers in xi_ab, 4 powers of ik_x or ik_y in g's, and final rescaling by L ** 2
+        norm *= (float(lminbox)) ** 8  # always 2 powers in xi_ab, 4 powers of ik_x or ik_y in g's, and final rescaling by L ** 2
         self.norm = -1 * norm
 
         # shifted L stuff
@@ -292,7 +295,7 @@ class n1_ptt:
         """Builds frequency maps shifted by L
 
             Returns:
-                frequency maps k_y - L_y, k_x - L_x
+                frequency maps k_y - L_y, k_x - L_x   (l_1 - L) = -l_2
 
         """
         nLs = L / self.lminbox
@@ -340,6 +343,124 @@ class n1_ptt:
 
         return np.fft.ifft2(wi * self.shiftF(wj, dlpix, Laxis).conj())
 
+    def get_gf(self, L, pi, pj, ders_i, ders_j, Laxis=0):
+        """
+
+            This is formally \int_{l1, l2} W^{TT}(l1, l2) * e^{i l_1 r}  ( i Cl_1 l_1)_(ders_i)( i Cl_2 l_2)_(ders_j)
+                                where l2 is L - l1
+
+        """
+
+        ml2_yx = self.shifted_p_nynx  if L > 0 else  self.shifted_m_nynx # this is -l2
+        l2s = self.shifted_p_ls if L > 0 else self.shifted_m_ls
+
+        w = -(self.ns[1] * ml2_yx[1] + self.ns[0] * ml2_yx[0]) * ( self.ctt[l2s] + self.ctt[self.ls])
+        w += self.ctt[self.ls] * ( self.ns[1] ** 2 + self.ns[0] ** 2)
+        w += self.ctt[l2s] * ( ml2_yx[0] ** 2 + ml2_yx[1] ** 2)
+        w *= self.F[self.ls] * self.F[l2s]
+        #FIXME: these calcs up to here could be done only once per L
+
+        if pi > 0:
+            w *= (self.ctt ** pi)[self.ls]
+            for deri in ders_i:
+                w *= self.ns[deri]
+        if pj > 0:
+            w *= (self.ctt ** pj)[l2s]
+            for derj in ders_j:
+                w *= ml2_yx[derj]
+        return np.fft.ifft2(w)
+
+    def _set_wtt(self, L, Laxis=0):
+        ml2_yx = self.get_shifted_lylx(L, Laxis=Laxis)  # if L > 0 else  self.shifted_m_nynx # this is -l2
+        l2s = self.freq2ls(ml2_yx[1], ml2_yx[0])
+        # ml2_yx = self.shifted_m_nynx  # this is -l2
+        # l2s = self.shifted_m_ls
+
+        w = -(self.ns[1] * ml2_yx[1] + self.ns[0] * ml2_yx[0]) * (self.ctt[l2s] + self.ctt[self.ls])
+        w += self.ctt[self.ls] * (self.ns[1] ** 2 + self.ns[0] ** 2)
+        w += self.ctt[l2s] * (ml2_yx[0] ** 2 + ml2_yx[1] ** 2)
+        w *= self.F[self.ls] * self.F[l2s]
+        if L > 0:
+            self._wTT_pL = (w, l2s, ml2_yx)
+        else:
+            self._wTT_mL = (w, l2s, ml2_yx)
+
+
+    def _get_wtt_sym(self, L, Laxis=0, rfft=False):
+        """Symmetrized TT QE func for L + q, L- q param.
+
+            This has the real fftws conjugacy property
+
+            2 C_{L + q} (L + q) L + 2 C_{L - q} (L - q) L
+
+        """
+        if self._wTT is None:
+            qml = np.array(self.get_shifted_lylx( L * 0.5, Laxis)) # this is q - L/2
+            qpl = np.array(self.get_shifted_lylx(-L * 0.5, Laxis)) # this is q + L/2
+
+            ls_m = self.freq2ls(qml[1], qml[0])
+            ls_p = self.freq2ls(qpl[1], qpl[0])
+
+            #FIXM:E somthin g fishy here
+            #w =  (self.ctt[ls_p] * (qpl[Laxis] * Lgrid) -  self.ctt[ls_m] * (qml[Laxis] * Lgrid))
+            w = - (self.ctt[ls_p] * (qpl[0] ** 2 + qpl[1] ** 2) +  self.ctt[ls_m] * (qml[0] ** 2 + qml[1] ** 2))
+            w += (self.ctt[ls_p] + self.ctt[ls_m]) * (qpl[0] * qml[0] + qpl[1] * qml[1])
+            w *= self.F[ls_m] * self.F[ls_p]
+            sli = slice(0, self.shape[1] // 2 + 1)
+
+            self._wTT = ( w, qml, qpl, ls_m, ls_p)
+            self._wTT_rfft = (w[:, sli], qml[:, :, sli], qpl[:,:, sli], ls_m[:, sli], ls_p[:, sli])
+        return self._wTT_rfft if rfft else self._wTT
+
+
+    def get_hf_w(self, L, pi, pj, ders_i, ders_j, Laxis=0, rfft=False):
+        r""" Similar as gf bth with phase factor extracted (param. in terms of L + q, L -q
+
+
+
+        """
+        assert len(ders_i) == pi
+        assert len(ders_j) == pj
+
+        wtt, qml, qpl, ls_m, ls_p = self._get_wtt_sym(L, Laxis=Laxis, rfft=rfft)
+        w = wtt  * 1j ** (pi + pj)
+        if pi > 0:
+            w *= (self.ctt ** pi)[ls_p]
+            for deri in ders_i:
+                w *= qpl[deri]
+        if pj > 0:
+            w *= (self.ctt ** pj)[ls_m]
+            for derj in ders_j:
+                w *= qml[derj]
+        return np.fft.irfft2(w) if rfft else np.fft.ifft2(w)
+
+
+    def get_gf_w(self, L, pi, pj, ders_i, ders_j, Laxis=0):
+        """
+
+            This is formally \int_{l1, l2} W^{TT}(l1, l2) * e^{i l_1 r}  ( i Cl_1 l_1)_(ders_i)( i Cl_2 l_2)_(ders_j)
+                                where l2 is L - l1
+
+        """
+        if L > 0:
+            if self._wTT_pL is None:
+                self._set_wtt(L, Laxis=Laxis)
+            _w, l2s, ml2_yx = self._wTT_pL
+        else:
+            if self._wTT_mL is None:
+                self._set_wtt(L, Laxis=Laxis)
+            _w, l2s, ml2_yx = self._wTT_mL
+        w = np.copy(_w)
+        if pi > 0:
+            w *= (self.ctt ** pi)[self.ls]
+            for deri in ders_i:
+                w *= self.ns[deri]
+        if pj > 0:
+            w *= (self.ctt ** pj)[l2s]
+            for derj in ders_j:
+                w *= ml2_yx[derj]
+        return np.fft.ifft2(w)
+
     def get_g_anyL(self, L, pi, pj, ders_i, ders_j, Laxis=0):
         """L here
 
@@ -385,8 +506,138 @@ class n1_ptt:
 
         return self.norm * ret_re * dl ** 2
 
+    def get_n1(self, L, Laxis=0):
+        r"""N1 lensing gradient-induced lensing bias, for lensing gradient or curl bias
 
-    def get_n1(self, L, gorc='g', Laxis=0):
+            Args:
+                L: multipole L of :math:`N^{(1)}_L`
+                Laxis(optional, 0 or 1): Axis towards which L is pointing. (For testing purposes, result should be independent of this)
+
+            Returns:
+                gradient-induced, lensing gradient or curl bias :math:`N_L^{(1)}`
+
+
+        """
+        L = float(L)
+        #--- Builds shifted frequency grids for feeding into the FFT's
+
+        self.shifted_p_nynx = self.get_shifted_lylx(L, Laxis)
+        self.shifted_m_nynx = self.get_shifted_lylx(-L, Laxis)
+        self.shifted_p_ls = self.freq2ls(self.shifted_p_nynx[1], self.shifted_p_nynx[0])
+        self.shifted_m_ls = self.freq2ls(self.shifted_m_nynx[1], self.shifted_m_nynx[0])
+
+        #--- precalc of fft'ed maps:(probably still some redundancy here with the g01's)
+        gf_00_mL_zz =  self.get_gf(-L, 0, 0, [], [])
+        gf_10_pL_az = [self.get_gf( L, 1, 0, [a], [ ]) for a in [0, 1] ]
+        gf_01_mL_za = [self.get_gf(-L, 0, 1, [ ], [a]) for a in [0, 1] ] # in principle this is the just above but with -r e^iLr
+        #gf_01_mL_za = [self.flip(f) for f in gf_10_pL_az]
+        #FIXME: this looks right up to details:
+        #eiLr  = np.exp(- 2j * np.pi / self.shape[0] * self.ns[Laxis] * ( L / self.lminbox ) )
+        #gf_01_mL_za = [eiLr * f for f in gf_10_pL_az] # in principle this is the just above but with -r
+
+        #--- Loop over cartesian deflection field components
+        n1 = 0.
+        for a in [0, 1]:
+            for b in [0, 1]:
+                term =  (self.get_gf(L, 1, 1, [a], [b]) * gf_00_mL_zz).real
+                term += (gf_10_pL_az[a] * gf_01_mL_za[b]).real
+                n1 += np.sum(self.xiab[a + b] * term)
+
+        return self.norm * n1
+
+    def get_n1_devel(self, L, Laxis=0, rfft=True):
+        r"""N1 lensing gradient-induced lensing bias, for lensing gradient or curl bias
+
+            Args:
+                L: multipole L of :math:`N^{(1)}_L`
+                Laxis(optional, 0 or 1): Axis towards which L is pointing. (For testing purposes, result should be independent of this)
+
+            Returns:
+                gradient-induced, lensing gradient or curl bias :math:`N_L^{(1)}`
+
+            Note:
+                This keeps the QE functions intact and absords the l_phi's factor in Cphiphi_L in the integrals
+
+        """
+        # --- Builds shifted frequency grids for feeding into the FFT's
+        L = float(L)
+
+        # --- precalc of some of the fft'ed maps:(probably still some redundancy here with the g11's)
+        self._wTT = None
+        h_00 = self.get_hf_w(L, 0, 0, [], [], rfft=rfft)
+        h_10_a = [self.get_hf_w(L, 1, 0, [a], []) for a in [0, 1]]
+        #h_01_a = [self.get_hf_w(-L, 0, 1, [], [a]) for a in [0, 1]]
+
+        # gf_01_mL_za = [self.flip(f) for f in gf_10_pL_az]
+        #eiLr  = np.exp(-2j * np.pi / self.shape[0] * self.ns[Laxis] * ( L / self.lminbox ) )
+        #gf_01_mL_za = [eiLr * f for f in gf_10_pL_az] # in principle this is the just above but with -r
+
+        # --- Loop over cartesian deflection field components
+        n1 = 0.
+        ## 00:
+        term = self.get_hf_w(L, 1, 1, [0], [0], rfft=rfft) * h_00 + (h_10_a[0] ** 2).real
+        n1 += np.sum(self.xiab[0 + 0] * term)
+        ## 11:
+        term = self.get_hf_w(L, 1, 1, [1], [1], rfft=rfft) * h_00 + (h_10_a[1] ** 2).real
+        n1 += np.sum(self.xiab[1 + 1] * term)
+        # 01:
+        term = self.get_hf_w(L, 1, 1, [0], [1], rfft=False).real * h_00 + (h_10_a[1] * h_10_a[0])
+        n1 += 2. * np.sum(self.xiab[1 + 0] * term)
+        # 10:
+        #term = self.get_hf_w(L, 1, 1, [1], [0]).real  * h_00 + (h_10_a[1] * h_10_a[0]).real
+        #n1 += np.sum(self.xiab[1 + 0] * term)
+
+        #for a in [0, 1]:
+        #    for b in [0, 1]:
+        #        term = (self.get_hf_w(L, 1, 1, [a], [b]) * h_00).real
+        #        term += (h_10_a[a] * h_10_a[b]).real
+        #        n1 += np.sum(self.xiab[a + b] * term)
+        # FIXME: make this less bg prone
+        self._wTT = None
+        return self.norm * n1
+
+    def get_n1_devel1(self, L, Laxis=0):
+        r"""N1 lensing gradient-induced lensing bias, for lensing gradient or curl bias
+
+            Args:
+                L: multipole L of :math:`N^{(1)}_L`
+                Laxis(optional, 0 or 1): Axis towards which L is pointing. (For testing purposes, result should be independent of this)
+
+            Returns:
+                gradient-induced, lensing gradient or curl bias :math:`N_L^{(1)}`
+
+            Note:
+                This keeps the QE functions intact and absords the l_phi's factor in Cphiphi_L in the integrals
+
+        """
+        # --- Builds shifted frequency grids for feeding into the FFT's
+        L = float(L)
+
+        # --- precalc of some of the fft'ed maps:(probably still some redundancy here with the g11's)
+        self._wTT_pL = None
+        self._wTT_mL = None
+        gf_00_mL_zz = self.get_gf_w(-L, 0, 0, [], [])
+        gf_10_pL_az = [self.get_gf_w(L, 1, 0, [a], []) for a in [0, 1]]
+        gf_01_mL_za = [self.get_gf_w(-L, 0, 1, [], [a]) for a in [0, 1]]  # in principle this is the just above but with -r e^iLr
+        # gf_01_mL_za = [self.flip(f) for f in gf_10_pL_az]
+        # FIXME: this looks right up to details:
+        #eiLr  = np.exp(-2j * np.pi / self.shape[0] * self.ns[Laxis] * ( L / self.lminbox ) )
+        #gf_01_mL_za = [eiLr * f for f in gf_10_pL_az] # in principle this is the just above but with -r
+
+        # --- Loop over cartesian deflection field components
+        n1 = 0.
+        for a in [0, 1]:
+            for b in [0, 1]:
+                term = (self.get_gf_w(L, 1, 1, [a], [b]) * gf_00_mL_zz).real
+                term += (gf_10_pL_az[a] * gf_01_mL_za[b]).real
+                n1 += np.sum(self.xiab[a + b] * term)
+        # FIXME: make this less bg prone
+        self._wTT_pL = None
+        self._wTT_mL = None
+
+        return self.norm * n1
+
+    def get_n1_correctbutold(self, L, gorc='g', Laxis=0):
         r"""N1 lensing gradient-induced lensing bias, for lensing gradient or curl bias
 
             Args:
