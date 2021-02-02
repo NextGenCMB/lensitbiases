@@ -85,16 +85,16 @@ with
 \begin{equation}
 	g^{ij}_{\bll, (\alpha, \beta)}(\br) = \intL W^{TT}(\bl_1,\bl_2) (i C_{l_1}\bl_1)_{\alpha} (i C_{l_2}\bl_2)_{\beta} e^{i \bl_1 \cdot \br}
 \end{equation}
-We can simplify further going to $\bl - \bll/2$, $\bl + \bll/2$, with the same-looking definitions (with, say, $h's$) The $h$'s have the properties $h_{-\bll, (,\alpha)}^{(0, 1)} = h_{\bll (\alpha,)}^{(1, 0)} $. Further, with $\bll = (L, L)/\sqrt{2}$ we have additional symmetries $h^{11}_{x,x} = h^{11}_{y,y}.transpose()$, $h^{(1, 0)}_{L,(x,)} = h^{(1, 0)}_{L,(y,)}.transpose()$ and similar. End result is
+We can simplify further going to $\bl - \bll/2$, $\bl + \bll/2$, with the same-looking definitions (with, say, $h's$) The $h$'s have the properties $h_{-\bll, (,\alpha)}^{(0, 1)} = h_{\bll (\alpha,)}^{(1, 0)} $. Further, with $\bll = (L, L)/\sqrt{2}$ we have additional symmetries $h^{11}_{x,x} = h^{11}_{y,y}.transpose()$, $h^{(1, 0)}_{L,(x,)} = h^{(1, 0)}_{L,(y,)}.transpose()$ and similar. End result is (no sums)
 \begin{equation}
 \boxed{
 \begin{split}
-	&2\int d\br \:	\xi^{yy}(\br) \left[h^{(11)}_{\bll, (y,y)}(\br)h^{(00)}_{\bll,(,)}(\br) +  \left(g^{(10)}_{\bll, (y,)}\right)^2(\br)\right] \\
-	+&2 \int d\br \:	\xi^{yx}(\br)\left[h^{(11)}_{\bll, (y,x)}(\br)h^{(00)}_{\bll,(,)}(\br) +  \left(g^{(10)}_{\bll, (y,)}g^{T,(10)}_{\bll, (y,)}\right)(\br)\right]
+	&2\int d\br \:	\xi^{yy}(\br) \left[h^{(11)}_{\bll, (y,y)}(\br)h^{(00)}_{\bll,(,)}(\br) +  \left(h^{(10)}_{\bll, (y,)}\right)^2(\br)\right] \\
+	+&2 \int d\br \:	\xi^{yx}(\br)\left[h^{(11)}_{\bll, (y,x)}(\br)h^{(00)}_{\bll,(,)}(\br) +  \left(h^{(10)}_{\bll, (y,)}h^{T,(10)}_{\bll, (y,)}\right)(\br)\right]
 \end{split}
 }
 \end{equation}
-
+A similar formula holds with the spin-weight transform, where the transpose identites become the complex conjugate operations. (I believe I need complex fft's then though, looks slower)
 \subsection{curved-sky}
 On the curved-sky (for spin-0 fields only) one get something similar-looking:
 \begin{equation}

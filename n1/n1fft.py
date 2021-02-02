@@ -461,6 +461,14 @@ class n1_ptt:
                 w *= qml[derj]
         return np.fft.irfft2(w) if rfft else np.fft.ifft2(w)
 
+    def _get_hf_11_10_w(self, L, Laxis=0):
+        r"""Tuned version of real part of hf_11_{xy}
+
+        """
+        wtt, qml, qpl, ls_m, ls_p = self._get_wtt_sym(L, Laxis=Laxis, rfft=True)
+        w = -0.5 * wtt * self.ctt[ls_p] * self.ctt[ls_m] * (qml[1] * qpl[0] + qml[0] * qpl[1])
+        return np.fft.irfft2(w)
+
 
     def get_gf_w(self, L, pi, pj, ders_i, ders_j, Laxis=0):
         """
@@ -593,12 +601,14 @@ class n1_ptt:
         self._wTT = None
         if Laxis >= 2:
             h_00 = self.get_hf_w(L, 0, 0, [], [], Laxis=Laxis, rfft=rfft)
-            h_10_y = self.get_hf_w(L, 1, 0, [0], [], Laxis=Laxis)
+            h_10_y = self.get_hf_w(L, 1, 0, [0], [], Laxis=Laxis,  rfft=False)
             h_11_yy = self.get_hf_w(L, 1, 1, [0], [0], Laxis=Laxis, rfft=rfft)
+            re10 = h_10_y.real
+            im10 = h_10_y.imag
             # the other is the transpose
-            # --- Loop over cartesian deflection field components
-            term1 = h_11_yy * h_00 + (h_10_y ** 2).real
-            term2 = self.get_hf_w(L, 1, 1, [0], [1], Laxis=Laxis, rfft=False) * h_00 + (h_10_y * h_10_y.T).real
+
+            term1 = h_11_yy * h_00 + (re10 ** 2 - im10 ** 2)
+            term2 = self._get_hf_11_10_w(L, Laxis=Laxis) * h_00 + (re10 * re10.T - im10 * im10.T)
             n1 = 2. * np.sum(self.xiab[0 + 0] * term1 + self.xiab[1 + 0] * term2)
         else:
 
