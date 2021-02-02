@@ -5,7 +5,7 @@ import plancklens
 from plancklens import utils
 from scipy.interpolate import UnivariateSpline as spl
 from n1.scripts import test2plancklens_1002000 as tp
-from n1 import n1 as n1f
+from n1 import n1 as n1f, n1_utils
 CLS = os.path.join(os.path.dirname(os.path.abspath(plancklens.__file__)), 'data', 'cls')
 
 
@@ -230,6 +230,10 @@ class n1_ptt:
         shape = (npix, npix)
         rshape = (npix, npix // 2 + 1)
         fft_shape = rshape if rFFT else shape
+        #=====
+
+        self.box = n1_utils.box(lside, npix)
+
 
         # === frequencies
         nx = Freq(np.arange(fft_shape[1]), shape[1])  # unsigned FFT frequencies
@@ -261,9 +265,8 @@ class n1_ptt:
         self.xiab = np.zeros((3, shape[0], shape[1]), dtype=float)
         self.xiab[0] = np.fft.irfft2(extcl(lmax_seen, cpp)[ls[:, rfft_sli]] * (1j * ny[:, rfft_sli]) ** 2)  # 00
         self.xiab[2] = np.fft.irfft2(extcl(lmax_seen, cpp)[ls[:, rfft_sli]] * (1j * nx[:, rfft_sli]) ** 2)  # 11
-        self.xiab[1] = np.fft.irfft2(
-            extcl(lmax_seen, cpp)[ls[:, rfft_sli]] * (1j * ny[:, rfft_sli]) * (1j * nx[:, rfft_sli]))  # 01 or 10
-
+        self.xiab[1] = np.fft.irfft2(extcl(lmax_seen, cpp)[ls[:, rfft_sli]] * (1j * ny[:, rfft_sli]) * (1j * nx[:, rfft_sli]))  # 01 or 10
+        self.xipp = np.fft.irfft2(extcl(lmax_seen, cpp)[ls[:, rfft_sli]])
         lmax_spec = 2 * lmax_seen# + lminbox
         self.F = extcl(lmax_spec , fals['tt'])  # + 1 because of shifted freq. boxes
         self.ctt = extcl(lmax_spec, cls_grad['tt'])
@@ -580,7 +583,7 @@ class n1_ptt:
 
         return self.norm * n1
 
-    def get_n1_devel(self, L, Laxis=0, rfft=True):
+    def get_n1_devel(self, L, Laxis=2, do_n1mat=False):
         r"""N1 lensing gradient-induced lensing bias, for lensing gradient or curl bias
 
             Args:
@@ -600,9 +603,9 @@ class n1_ptt:
         # --- precalc of some of the fft'ed maps:(probably still some redundancy here with the g11's)
         self._wTT = None
         if Laxis >= 2:
-            h_00 = self.get_hf_w(L, 0, 0, [], [], Laxis=Laxis, rfft=rfft)
+            h_00 = self.get_hf_w(L, 0, 0, [], [], Laxis=Laxis, rfft=True)
             h_10_y = self.get_hf_w(L, 1, 0, [0], [], Laxis=Laxis,  rfft=False)
-            h_11_yy = self.get_hf_w(L, 1, 1, [0], [0], Laxis=Laxis, rfft=rfft)
+            h_11_yy = self.get_hf_w(L, 1, 1, [0], [0], Laxis=Laxis, rfft=True)
             re10 = h_10_y.real
             im10 = h_10_y.imag
             # the other is the transpose
@@ -610,8 +613,15 @@ class n1_ptt:
             term1 = h_11_yy * h_00 + (re10 ** 2 - im10 ** 2)
             term2 = self._get_hf_11_10_w(L, Laxis=Laxis) * h_00 + (re10 * re10.T - im10 * im10.T)
             n1 = 2. * np.sum(self.xiab[0 + 0] * term1 + self.xiab[1 + 0] * term2)
+            self._wTT = None
+            if do_n1mat:
+                f1 = 2 * np.fft.rfft2(term1) * (self.ns[0][:,:self.box.rshape[1]]) ** 2
+                f2 = 2 * np.fft.rfft2(term2) * (self.ns[0][:,:self.box.rshape[1]] * self.ns[1][:,:self.box.rshape[1]])
+                n1_mat = self.box.bin_in_l(f1.real + f2.real)
+                return n1, n1_mat
+            return n1
         else:
-
+            rfft = True
             h_00 = self.get_hf_w(L, 0, 0, [], [], Laxis=Laxis, rfft=rfft)
             h_10_a = [self.get_hf_w(L, 1, 0, [a], [], Laxis=Laxis) for a in [0, 1]]
             # h_01_a = [self.get_hf_w(-L, 0, 1, [], [a]) for a in [0, 1]]
