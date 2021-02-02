@@ -249,6 +249,8 @@ class n1_ptt:
         self.shape = shape
         self._wTT_pL = None
         self._wTT_mL = None
+        self._wTT = None
+
         if cpp is None:
             cls_unl = utils.camb_clfile(os.path.join(CLS, 'FFP10_wdipole_lenspotentialCls.dat'))
             cpp = cls_unl['pp'][:lmaxphi + 1]
@@ -262,7 +264,7 @@ class n1_ptt:
         self.xiab[1] = np.fft.irfft2(
             extcl(lmax_seen, cpp)[ls[:, rfft_sli]] * (1j * ny[:, rfft_sli]) * (1j * nx[:, rfft_sli]))  # 01 or 10
 
-        lmax_spec = lmax_seen + lminbox
+        lmax_spec = 2 * lmax_seen# + lminbox
         self.F = extcl(lmax_spec , fals['tt'])  # + 1 because of shifted freq. boxes
         self.ctt = extcl(lmax_spec, cls_grad['tt'])
 
@@ -304,6 +306,22 @@ class n1_ptt:
         fLp = self.ns[0] if Laxis else self.ns[1]
         return (fLp, fL - dL) if Laxis else (fL -dL, fLp)
 
+    def get_shifted_lylx_sym(self, L):
+        """Shifts by L/root(2) in both directions
+
+            Returns:
+                frequency maps k_y - L/root(2), k_x - L/root(2)
+
+        """
+        ly = np.outer(self.ny_1d -  L / np.sqrt(2.) / self.lminbox, np.ones(len(self.ny_1d)))
+        return ly, ly.transpose()
+
+        #nLs = L / np.sqrt(2.) / self.lminbox
+        #iL, dL = (int(np.round(nLs)), nLs - int(np.round(nLs)))
+        #ly = np.outer(np.roll(self.ny_1d, iL) -dL, np.ones(self.shape[1]))
+        #return ly, np.copy(ly.transpose())
+
+
     @staticmethod
     def flip(F):
         """F(-r)
@@ -323,7 +341,7 @@ class n1_ptt:
         """Maps flat-sky frequencies onto integer multipoles
 
         """
-        return np.int_(np.round(self.lminbox * np.sqrt(nx ** 2 + ny ** 2)))
+        return np.int_(np.round(self.lminbox * (np.sqrt(nx ** 2 + ny ** 2))))
 
     def get_g(self, dlpix, pi, pj, ders_i, ders_j, Laxis=0):
         """It must hold
@@ -386,7 +404,7 @@ class n1_ptt:
             self._wTT_mL = (w, l2s, ml2_yx)
 
 
-    def _get_wtt_sym(self, L, Laxis=0, rfft=False):
+    def _get_wtt_sym(self, L, Laxis=2, rfft=False):
         """Symmetrized TT QE func for L + q, L- q param.
 
             This has the real fftws conjugacy property
@@ -395,16 +413,26 @@ class n1_ptt:
 
         """
         if self._wTT is None:
-            qml = np.array(self.get_shifted_lylx( L * 0.5, Laxis)) # this is q - L/2
-            qpl = np.array(self.get_shifted_lylx(-L * 0.5, Laxis)) # this is q + L/2
+            if Laxis == 2:
+                qml = np.array(self.get_shifted_lylx_sym( L * 0.5))  # this is q - L/2
+                qpl = np.array(self.get_shifted_lylx_sym(-L * 0.5))  # this is q + L/2
+                #nLs = 0.5 * L / np.sqrt(2.) / self.lminbox
+                #iL, dL = (int(np.round(nLs)), nLs - int(np.round(nLs)))
+                #ly = np.outer(np.roll(self.ny_1d, iL) - dL, np.ones(self.shape[1]))
+                #qml = np.array([ly, ly.transpose()]) # this is q - L/2
+                #ly = np.outer(np.roll(self.ny_1d, -iL) + dL, np.ones(self.shape[1]))
+                #qpl = np.array([ly, ly.transpose()]) # this is q + L/2
 
-            ls_m = self.freq2ls(qml[1], qml[0])
-            ls_p = self.freq2ls(qpl[1], qpl[0])
+            else:
+                qml = np.array(self.get_shifted_lylx( L * 0.5, Laxis)) # this is q - L/2
+                qpl = np.array(self.get_shifted_lylx(-L * 0.5, Laxis)) # this is q + L/2
 
-            #FIXM:E somthin g fishy here
-            #w =  (self.ctt[ls_p] * (qpl[Laxis] * Lgrid) -  self.ctt[ls_m] * (qml[Laxis] * Lgrid))
-            w = - (self.ctt[ls_p] * (qpl[0] ** 2 + qpl[1] ** 2) +  self.ctt[ls_m] * (qml[0] ** 2 + qml[1] ** 2))
-            w += (self.ctt[ls_p] + self.ctt[ls_m]) * (qpl[0] * qml[0] + qpl[1] * qml[1])
+            ls_m_sqd = qml[0] ** 2 + qml[1] ** 2
+            ls_p_sqd = qpl[0] ** 2 + qpl[1] ** 2
+            ls_m = np.int_(np.round(self.lminbox * np.sqrt(ls_m_sqd)))
+            ls_p = np.int_(np.round(self.lminbox * np.sqrt(ls_p_sqd)))
+            w = - (self.ctt[ls_p] * ls_p_sqd +  self.ctt[ls_m] * ls_m_sqd)
+            w +=  (self.ctt[ls_p] + self.ctt[ls_m]) * (qpl[0] * qml[0] + qpl[1] * qml[1])
             w *= self.F[ls_m] * self.F[ls_p]
             sli = slice(0, self.shape[1] // 2 + 1)
 
@@ -414,8 +442,7 @@ class n1_ptt:
 
 
     def get_hf_w(self, L, pi, pj, ders_i, ders_j, Laxis=0, rfft=False):
-        r""" Similar as gf bth with phase factor extracted (param. in terms of L + q, L -q
-
+        r""" Similar as gf bth with phase factor extracted (param. in terms of q + L/2, q - L/2
 
 
         """
@@ -564,25 +591,35 @@ class n1_ptt:
 
         # --- precalc of some of the fft'ed maps:(probably still some redundancy here with the g11's)
         self._wTT = None
-        h_00 = self.get_hf_w(L, 0, 0, [], [], rfft=rfft)
-        h_10_a = [self.get_hf_w(L, 1, 0, [a], []) for a in [0, 1]]
-        #h_01_a = [self.get_hf_w(-L, 0, 1, [], [a]) for a in [0, 1]]
+        if Laxis >= 2:
+            h_00 = self.get_hf_w(L, 0, 0, [], [], Laxis=Laxis, rfft=rfft)
+            h_10_y = self.get_hf_w(L, 1, 0, [0], [], Laxis=Laxis)
+            h_11_yy = self.get_hf_w(L, 1, 1, [0], [0], Laxis=Laxis, rfft=rfft)
+            # the other is the transpose
+            # --- Loop over cartesian deflection field components
+            term1 = h_11_yy * h_00 + (h_10_y ** 2).real
+            term2 = self.get_hf_w(L, 1, 1, [0], [1], Laxis=Laxis, rfft=False) * h_00 + (h_10_y * h_10_y.T).real
+            n1 = 2. * np.sum(self.xiab[0 + 0] * term1 + self.xiab[1 + 0] * term2)
+        else:
 
-        # gf_01_mL_za = [self.flip(f) for f in gf_10_pL_az]
-        #eiLr  = np.exp(-2j * np.pi / self.shape[0] * self.ns[Laxis] * ( L / self.lminbox ) )
-        #gf_01_mL_za = [eiLr * f for f in gf_10_pL_az] # in principle this is the just above but with -r
+            h_00 = self.get_hf_w(L, 0, 0, [], [], Laxis=Laxis, rfft=rfft)
+            h_10_a = [self.get_hf_w(L, 1, 0, [a], [], Laxis=Laxis) for a in [0, 1]]
+            # h_01_a = [self.get_hf_w(-L, 0, 1, [], [a]) for a in [0, 1]]
 
-        # --- Loop over cartesian deflection field components
-        n1 = 0.
-        ## 00:
-        term = self.get_hf_w(L, 1, 1, [0], [0], rfft=rfft) * h_00 + (h_10_a[0] ** 2).real
-        n1 += np.sum(self.xiab[0 + 0] * term)
-        ## 11:
-        term = self.get_hf_w(L, 1, 1, [1], [1], rfft=rfft) * h_00 + (h_10_a[1] ** 2).real
-        n1 += np.sum(self.xiab[1 + 1] * term)
-        # 01:
-        term = self.get_hf_w(L, 1, 1, [0], [1], rfft=False).real * h_00 + (h_10_a[1] * h_10_a[0])
-        n1 += 2. * np.sum(self.xiab[1 + 0] * term)
+            # gf_01_mL_za = [self.flip(f) for f in gf_10_pL_az]
+            # eiLr  = np.exp(-2j * np.pi / self.shape[0] * self.ns[Laxis] * ( L / self.lminbox ) )
+            # gf_01_mL_za = [eiLr * f for f in gf_10_pL_az] # in principle this is the just above but with -r
+
+            # --- Loop over cartesian deflection field components
+            ## 00:
+            term = self.get_hf_w(L, 1, 1, [0], [0], Laxis=Laxis, rfft=rfft) * h_00 + (h_10_a[0] ** 2).real
+            n1 = np.sum(self.xiab[0 + 0] * term)
+            ## 11:
+            term = self.get_hf_w(L, 1, 1, [1], [1], Laxis=Laxis, rfft=rfft) * h_00 + (h_10_a[1] ** 2).real
+            n1 += np.sum(self.xiab[1 + 1] * term)
+            # 01:
+            term = self.get_hf_w(L, 1, 1, [0], [1], Laxis=Laxis, rfft=False).real * h_00 + (h_10_a[1] * h_10_a[0])
+            n1 += 2. * np.sum(self.xiab[1 + 0] * term)
         # 10:
         #term = self.get_hf_w(L, 1, 1, [1], [0]).real  * h_00 + (h_10_a[1] * h_10_a[0]).real
         #n1 += np.sum(self.xiab[1 + 0] * term)

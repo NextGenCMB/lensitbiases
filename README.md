@@ -14,7 +14,9 @@ N1 lensing bias calculation and tests
 
 
 
-## Now finally ok for PS with meaningful input aniso source spectrum!
+## Now N1 devel really super fast!
+# But some discontinuities issues...
+(maybe interpolation of Filters and Cls?)
 
     * pyfftw
     * symmetries?
