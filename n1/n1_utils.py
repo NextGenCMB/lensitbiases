@@ -5,6 +5,14 @@ def cli(cl):
     ret[np.where(cl != 0)] = 1./ cl[np.where(cl != 0)]
     return ret
 
+def extcl(lmax, cl):
+    if len(cl) - 1 < lmax:
+        dl = np.zeros(lmax + 1)
+        dl[:len(cl)] = cl
+    else:
+        dl = cl
+    return dl
+
 def freqs(i, N):
     """Outputs the absolute integers frequencies [0,1,...,N/2,N/2-1,...,1]
          in numpy fft convention as integer i runs from 0 to N-1.
@@ -56,8 +64,8 @@ class box:
         self.lsides = (lside, lside)
 
         # mini and maxi multipole in box
-        self.lminbox = 2. * np.pi / lside
-        self.lmaxbox = self._rsqd2l(nx[npix//2] ** 2 + ny[npix//2] ** 2)
+        self.lminbox = self.rsqd2l(1.)
+        self.lmaxbox = self.rsqd2l(nx[npix//2] ** 2 + ny[npix//2] ** 2)
 
         self._ellcounts = None
 
@@ -73,13 +81,13 @@ class box:
             self._ellcounts = counts
         return self._ellcounts
 
-    def _rsqd2l(self, r2):
-        return np.int_(np.round(self.lminbox * (np.sqrt(r2))))
+    def rsqd2l(self, r2):
+        return np.int_(np.round((2. * np.pi / self.lsides[0]) * (np.sqrt(r2))))
 
     def ls(self):
         r2 = np.outer(self.ny_1d ** 2, np.ones(len(self.nx_1d)))
         r2 += np.outer(np.ones(len(self.ny_1d)), self.nx_1d ** 2)
-        return self._rsqd2l(r2)
+        return self.rsqd2l(r2)
 
 
     def mode_counts(self):
@@ -90,7 +98,7 @@ class box:
         """
         nl = 2 * self._get_lcounts()
         lx, ly = rfft2_reals(self.shape)
-        for l in np.array(self._rsqd2l(lx ** 2 + ly ** 2), dtype=int):
+        for l in np.array(self.rsqd2l(lx ** 2 + ly ** 2), dtype=int):
             nl[l] -= 1
         return nl
 
