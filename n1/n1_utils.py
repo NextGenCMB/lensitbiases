@@ -94,16 +94,17 @@ class box:
             nl[l] -= 1
         return nl
 
-    def bin_in_l(self, weights):
+    def sum_in_l(self, weights):
         assert weights.shape == self.rshape, (weights.shape, self.rshape)
         shape = self.shape
         rshape = self.rshape
         ls = self.ls()
         cl = np.bincount(ls[:, 1:rshape[1] - 1].flatten(), weights=weights[:, 1:rshape[1] - 1].flatten(), minlength=self.lmaxbox+ 1)
         cl += np.bincount(ls[0:shape[0] // 2 + 1, [-1, 0]].flatten(), weights=weights[0:shape[0] // 2 + 1, [-1, 0]].flatten(), minlength=self.lmaxbox + 1)
-        return cl * cli(self._get_lcounts())
+        return cl * self.mode_counts() * cli(self._get_lcounts())
 
     def map2cl(self,m, lmax=None):
         assert m.shape == self.shape, (m.shape, self.shape)
+        if lmax is None: lmax = self.lmaxbox
         norm =  np.prod(self.lsides) / float(np.prod(self.shape)) ** 2
-        return norm * self.bin_in_l(np.abs(np.fft.rfft2(m)) ** 2)[:(lmax or self.lmaxbox) + 1]
+        return norm * self.sum_in_l(np.abs(np.fft.rfft2(m)) ** 2)[:lmax+1] * cli(self.mode_counts())

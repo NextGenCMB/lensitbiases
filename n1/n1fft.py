@@ -281,7 +281,7 @@ class n1_ptt:
 
         norm = (npix / self.lside) ** 4  # overall final normalization
         norm *= (float(lminbox)) ** 8  # always 2 powers in xi_ab, 4 powers of ik_x or ik_y in g's, and final rescaling by L ** 2
-        self.norm = -1 * norm
+        self.norm = norm
 
         # shifted L stuff
         self.shifted_p_nynx = np.empty_like(self.ns)
@@ -615,11 +615,11 @@ class n1_ptt:
             n1 = 2. * np.sum(self.xiab[0 + 0] * term1 + self.xiab[1 + 0] * term2)
             self._wTT = None
             if do_n1mat:
-                f1 = 2 * np.fft.rfft2(term1) * (self.ns[0][:,:self.box.rshape[1]]) ** 2
-                f2 = 2 * np.fft.rfft2(term2) * (self.ns[0][:,:self.box.rshape[1]] * self.ns[1][:,:self.box.rshape[1]])
-                n1_mat = self.box.bin_in_l(f1.real + f2.real)
-                return n1, n1_mat
-            return n1
+                f1 = np.fft.rfft2(term1) * (self.ns[0][:,:self.box.rshape[1]]) ** 2
+                f2 = np.fft.rfft2(term2) * (self.ns[0][:,:self.box.rshape[1]] * self.ns[1][:,:self.box.rshape[1]])
+                n1_mat = -2. / np.prod(self.box.shape) * self.box.sum_in_l(f1.real + f2.real)
+                return self.norm * n1, self.norm  * n1_mat
+            return self.norm * n1
         else:
             rfft = True
             h_00 = self.get_hf_w(L, 0, 0, [], [], Laxis=Laxis, rfft=rfft)
