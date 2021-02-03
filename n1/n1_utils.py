@@ -50,11 +50,14 @@ class box:
 
         self.nx_1d = nx
         self.ny_1d = ny
-        self.lminbox = 2. * np.pi / lside
+
         self.shape = shape
         self.rshape = rshape
         self.lsides = (lside, lside)
-        self.lmaxbox = np.int_(np.round(self.lminbox * (np.sqrt(nx[npix//2] ** 2 + ny[npix//2] ** 2))))
+
+        # mini and maxi multipole in box
+        self.lminbox = 2. * np.pi / lside
+        self.lmaxbox = self._rsqd2l(nx[npix//2] ** 2 + ny[npix//2] ** 2)
 
         self._ellcounts = None
 
