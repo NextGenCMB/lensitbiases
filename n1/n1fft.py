@@ -1,10 +1,7 @@
 import numpy as np
-import os
-import plancklens
-from plancklens import utils
+
 from n1 import  n1_utils
 from n1.n1_utils import extcl
-CLS = os.path.join(os.path.dirname(os.path.abspath(plancklens.__file__)), 'data', 'cls')
 
 
 class n1_ptt:
@@ -34,8 +31,9 @@ class n1_ptt:
 
 
         # === normalization (for tt keys at least)
-        norm = (self.box.shape[0] / self.box.lsides[0]) ** 4  # overall final normalization
-        norm *= (float(self.box.lminbox)) ** 8  # always 2 powers in xi_ab, 4 powers of ik_x or ik_y in g's, and final rescaling by L ** 2
+        norm = (self.box.shape[0] / self.box.lsides[0]) ** 4  # overall final normalization from rfft'ing
+        norm *= (float(self.box.lminbox)) ** 8
+        # :always 2 powers in xi_ab, 4 powers of ik_x or ik_y in XY and IJ weights, and two add. powers matching xi_ab's from the responses
         self.norm = norm
 
         self._wTT = None
@@ -79,8 +77,10 @@ class n1_ptt:
             assert 0, 'no recipe to build ' + k
 
     def get_hf_w(self, L, pi, pj, ders_i, ders_j):
-        r""" Similar as gf bth with phase factor extracted (param. in terms of q + L/2, q - L/2
+        r"""Position-space weight functions entering the TT N1
 
+            Note:
+                all of these functions have tuned-in version implemented below
 
         """
         assert len(ders_i) == pi
@@ -97,6 +97,13 @@ class n1_ptt:
             for derj in ders_j:
                 w *= qml[derj]
         return np.fft.irfft2(w)
+
+    def _get_hf_00_w(self, L):
+        r"""Tuned version of hf_00_{}
+
+        """
+        wtt, qml, qpl, ls_m, ls_p = self.build_key('ptt', L)
+        return np.fft.irfft2(wtt)
 
     def _get_hf_11_10_w(self, L):
         r"""Tuned version of real part of hf_11_{xy} (itself real)
@@ -146,7 +153,7 @@ class n1_ptt:
 
         L = float(L)
         # --- precalc of some of the rfft'ed maps:)
-        h_00 = self.get_hf_w(L, 0, 0, [], [])
+        h_00 = self._get_hf_00_w(L)
         re_h_10_y, im_h_10_y = self._get_hf_10_a_w(L, a=0)
         h_11_yy = self._get_hf_11_aa_w(L, a=0)
         # the other is the transpose
