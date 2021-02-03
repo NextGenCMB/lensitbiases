@@ -303,6 +303,8 @@ class n1_ptt:
                 frequency maps k_y - L_y, k_x - L_x   (l_1 - L) = -l_2
 
         """
+        if Laxis == 2:
+            return self.get_shifted_lylx_sym(L)
         nLs = L / self.lminbox
         iL, dL = (int(np.round(nLs)), nLs - int(np.round(nLs)))
         fL = np.roll(self.ns[Laxis], iL, axis=Laxis)  # rolling with positive L is taking l - L

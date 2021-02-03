@@ -5,12 +5,23 @@ from n1.n1_utils import extcl
 
 
 class n1_ptt:
-    def __init__(self, fals, cls_grad, cpp, lminbox=100, lmaxbox=5000):
+    def __init__(self, fals, cls_weight, cls_grad, cpp, lminbox=50, lmaxbox=2500):
         """Looks like this works fine...
+
+            lmin-lmax sort of tuned for Planck 2018 percent-level converged N1 calculation on 100 < L < 800
+
+            Args:
+                fals: dictionary with map filters
+                cls_weight: spectra dict. for the QE estimator weights
+                cls_grad: spectra dict. for the QE estimators and response
+                cpp: anisotropy source spectrum
+                lminbox: minimal multipole present in the 2D box
+                lmaxbox: maximal multipole (along an axis) present in the 2D box
+
 
         """
         lside = 2. * np.pi / lminbox
-        npix = int(lmaxbox / np.pi * lside)
+        npix = int(lmaxbox / np.pi * lside) + 1
         if npix % 2 == 1: npix += 1
 
         #===== instance with 2D flat-sky box info
@@ -26,8 +37,9 @@ class n1_ptt:
         del nx, ny, ls
 
         # === Filter and cls array needed later on:
-        self.F = extcl(2 * self.box.lmaxbox , fals['tt'])  # + 1 because of shifted freq. boxes
-        self.ctt = extcl(2 * self.box.lmaxbox, cls_grad['tt'])
+        self.F     = extcl(self.box.lmaxbox + lminbox, fals['tt'])
+        self.ctt_f = extcl(self.box.lmaxbox + lminbox, cls_grad['tt'])       # responses spectra
+        self.ctt_w = extcl(self.box.lmaxbox + lminbox, cls_weight['tt'])    # estimator weights spectra
 
 
         # === normalization (for tt keys at least)
@@ -46,9 +58,16 @@ class n1_ptt:
                 frequency maps k_y - L/root(2), k_x - L/root(2)
 
         """
-        dL = L / np.sqrt(2.) / self.box.lminbox
-        ly = np.outer(self.box.ny_1d - dL  , np.ones(len(self.box.nx_1d)))
-        lx = np.outer(np.ones(len(self.box.ny_1d)), self.box.nx_1d - dL)
+        # simplest :
+        #dL = L / np.sqrt(2.) / self.box.lminbox
+        #ly = np.outer(self.box.ny_1d - dL  , np.ones(len(self.box.nx_1d)))
+        #lx = np.outer(np.ones(len(self.box.ny_1d)), self.box.nx_1d - dL)
+        # This way preserves periodicity of the shifts and is the way to go for periodic boxes:
+        npix = self.box.shape[0]
+        # new 1d frequencies of q - L, respecting box periodicity:
+        ns_y = (npix // 2 + self.box.ny_1d - (L / np.sqrt(2.) / self.box.lminbox)) % npix - npix // 2
+        ly = np.outer(ns_y, np.ones(self.box.rshape[1]))
+        lx = np.outer(np.ones(self.box.rshape[0]), ns_y[:self.box.rshape[1]])
         return ly, lx
 
 
@@ -68,8 +87,9 @@ class n1_ptt:
                 ls_p_sqd = qpl[0] ** 2 + qpl[1] ** 2
                 ls_m = self.box.rsqd2l(ls_m_sqd)
                 ls_p = self.box.rsqd2l(ls_p_sqd)
-                w = - (self.ctt[ls_p] * ls_p_sqd +  self.ctt[ls_m] * ls_m_sqd)
-                w +=  (self.ctt[ls_p] + self.ctt[ls_m]) * (qpl[0] * qml[0] + qpl[1] * qml[1])
+                #TODO: add curl version here as well
+                w = - (self.ctt_w[ls_p] * ls_p_sqd + self.ctt_w[ls_m] * ls_m_sqd)
+                w += (self.ctt_w[ls_p] + self.ctt_w[ls_m]) * (qpl[0] * qml[0] + qpl[1] * qml[1])
                 w *= self.F[ls_m] * self.F[ls_p]
                 self._wTT = (w, qml, qpl, ls_m, ls_p)
             return self._wTT
@@ -89,11 +109,11 @@ class n1_ptt:
         wtt, qml, qpl, ls_m, ls_p = self.build_key('ptt', L)
         w = wtt  * 1j ** (pi + pj)
         if pi > 0:
-            w *= (self.ctt ** pi)[ls_p]
+            w *= (self.ctt_f ** pi)[ls_p]
             for deri in ders_i:
                 w *= qpl[deri]
         if pj > 0:
-            w *= (self.ctt ** pj)[ls_m]
+            w *= (self.ctt_f ** pj)[ls_m]
             for derj in ders_j:
                 w *= qml[derj]
         return np.fft.irfft2(w)
@@ -110,14 +130,14 @@ class n1_ptt:
 
         """
         wtt, qml, qpl, ls_m, ls_p = self.build_key('ptt', L)
-        return np.fft.irfft2( -0.5 * wtt * self.ctt[ls_p] * self.ctt[ls_m] * (qml[1] * qpl[0] + qml[0] * qpl[1]))
+        return np.fft.irfft2(-0.5 * wtt * self.ctt_f[ls_p] * self.ctt_f[ls_m] * (qml[1] * qpl[0] + qml[0] * qpl[1]))
 
     def _get_hf_11_aa_w(self, L, a=0):
         r"""Tuned version of real part of hf_11_{yy} (itself real)
 
         """
         wtt, qml, qpl, ls_m, ls_p = self.build_key('ptt', L)
-        return np.fft.irfft2(-wtt * self.ctt[ls_p] * self.ctt[ls_m] * (qml[a] * qpl[a]))
+        return np.fft.irfft2(-wtt * self.ctt_f[ls_p] * self.ctt_f[ls_m] * (qml[a] * qpl[a]))
 
     def _get_hf_10_a_w(self, L, a=0):
         r"""Tuned version of real and imaginary part of hf_10_{a} using only rffts
@@ -125,8 +145,8 @@ class n1_ptt:
         """
         wtt, qml, qpl, ls_m, ls_p = self.build_key('ptt', L)
         w = wtt  * 0.5j
-        facp =  self.ctt[ls_p] * qpl[a]
-        facm =  self.ctt[ls_m] * qml[a]
+        facp = self.ctt_f[ls_p] * qpl[a]
+        facm = self.ctt_f[ls_m] * qml[a]
         return np.fft.irfft2(w * (facp + facm)), np.fft.irfft2(-1j * w * (facp - facm))
 
     def destroy_key(self, k):
