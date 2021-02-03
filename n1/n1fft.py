@@ -72,7 +72,7 @@ class n1_ptt:
 
 
     def build_key(self,k, L):
-        """Symmetrized TT QE func for L + q, L- q param.
+        """Builds QE weight function func
 
             This has the real fftws conjugacy property
 
@@ -100,7 +100,7 @@ class n1_ptt:
         r"""Position-space weight functions entering the TT N1
 
             Note:
-                all of these functions have tuned-in version implemented below
+                all of these functions have tuned version implemented below
 
         """
         assert len(ders_i) == pi
