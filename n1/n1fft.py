@@ -36,9 +36,9 @@ class n1_ptt:
         del nx, ny, ls
 
         # === Filter and cls array needed later on:
-        self.F     = extcl(self.box.lmaxbox + lminbox, fals['tt'])
-        self.ctt_f = extcl(self.box.lmaxbox + lminbox, cls_grad['tt'])       # responses spectra
-        self.ctt_w = extcl(self.box.lmaxbox + lminbox, cls_weight['tt'])    # estimator weights spectra
+        self.Fls   = {k: extcl(self.box.lmaxbox + lminbox, fals[k]) for k in fals.keys()}
+        self.cls_f = {k: extcl(self.box.lmaxbox + lminbox, cls_grad[k]) for k in fals.keys()}    # responses spectra
+        self.cls_w = {k: extcl(self.box.lmaxbox + lminbox, cls_weight[k]) for k in fals.keys()}   # estimator weights spectra
 
 
         # === normalization (for tt keys at least)
@@ -47,7 +47,7 @@ class n1_ptt:
         # :always 2 powers in xi_ab, 4 powers of ik_x or ik_y in XY and IJ weights, and two add. powers matching xi_ab's from the responses
         self.norm = norm
 
-        self._wTT = None
+        self._Ws = dict()
 
 
     def _get_shifted_lylx_sym(self, L):
@@ -68,7 +68,7 @@ class n1_ptt:
         return np.meshgrid(ns_y, ns_y[:self.box.rshape[1]], indexing='ij')
 
 
-    def build_key(self,k, L):
+    def build_key(self, k, L):
         """Builds QE weight function func
 
             This has the real fftws conjugacy property
@@ -76,8 +76,17 @@ class n1_ptt:
             2 C_{L + q} (L + q) L + 2 C_{L - q} (L - q) L
 
         """
-        if k == 'ptt':
-            if self._wTT is None:
+        if k in ['ptt', 'pee']:
+            if k == 'ptt':
+                clw = self.cls_w.get('tt', None)
+                Fw = self.Fls.get('tt', None)
+            elif k == 'pee':
+                clw = self.cls_w.get('ee', None)
+                Fw = self.Fls.get('ee', None)
+            else:
+                assert 0
+            if self._Ws[k] is None:
+                assert clw is not None and Fw is not None, 'requires QE weights and filters for ' + k
                 qml = np.array(self._get_shifted_lylx_sym( L * 0.5))  # this is q - L/2
                 qpl = np.array(self._get_shifted_lylx_sym(-L * 0.5))  # this is q + L/2
                 ls_m_sqd = qml[0] ** 2 + qml[1] ** 2
@@ -85,11 +94,16 @@ class n1_ptt:
                 ls_m = self.box.rsqd2l(ls_m_sqd)
                 ls_p = self.box.rsqd2l(ls_p_sqd)
                 #TODO: add curl version here as well
-                w = - (self.ctt_w[ls_p] * ls_p_sqd + self.ctt_w[ls_m] * ls_m_sqd)
-                w += (self.ctt_w[ls_p] + self.ctt_w[ls_m]) * (qpl[0] * qml[0] + qpl[1] * qml[1])
-                w *= self.F[ls_m] * self.F[ls_p]
-                self._wTT = (w, qml, qpl, ls_m, ls_p)
-            return self._wTT
+                w = - (clw[ls_p] * ls_p_sqd + clw[ls_m] * ls_m_sqd)
+                w += (clw[ls_p] + clw[ls_m]) * (qpl[0] * qml[0] + qpl[1] * qml[1])
+                w *= Fw[ls_m] * Fw[ls_p]
+                if k == 'pee':
+                    #FIXME: easiest to the deflection QU etc, since the response fct are the simplest
+                    # must multiply with cos 2 phi_12, 2 * (l1 l2) ** 2 / l1^2 / l2^2 - 1
+                    #NB: this will crash for L = 0
+                    w *= (2 * (qpl[0] * qml[0] + qpl[1] * qml[1]) / ls_p_sqd / ls_m_sqd - 1.)
+                self._Ws[k] = (w, qml, qpl, ls_m, ls_p)
+            return self._Ws[k]
         else:
             assert 0, 'no recipe to build ' + k
 
@@ -106,11 +120,11 @@ class n1_ptt:
         wtt, qml, qpl, ls_m, ls_p = self.build_key('ptt', L)
         w = wtt  * 1j ** (pi + pj)
         if pi > 0:
-            w *= (self.ctt_f ** pi)[ls_p]
+            w *= (self.cls_f['tt'] ** pi)[ls_p]
             for deri in ders_i:
                 w *= qpl[deri]
         if pj > 0:
-            w *= (self.ctt_f ** pj)[ls_m]
+            w *= (self.cls_f['tt'] ** pj)[ls_m]
             for derj in ders_j:
                 w *= qml[derj]
         return np.fft.irfft2(w)
@@ -127,14 +141,14 @@ class n1_ptt:
 
         """
         wtt, qml, qpl, ls_m, ls_p = self.build_key('ptt', L)
-        return np.fft.irfft2(-0.5 * wtt * self.ctt_f[ls_p] * self.ctt_f[ls_m] * (qml[1] * qpl[0] + qml[0] * qpl[1]))
+        return np.fft.irfft2(-0.5 * wtt * self.cls_f['tt'][ls_p] * self.cls_f['tt'][ls_m] * (qml[1] * qpl[0] + qml[0] * qpl[1]))
 
     def _get_hf_11_aa_w(self, L, a=0):
         r"""Tuned version of real part of hf_11_{yy} (itself real)
 
         """
         wtt, qml, qpl, ls_m, ls_p = self.build_key('ptt', L)
-        return np.fft.irfft2(-wtt * self.ctt_f[ls_p] * self.ctt_f[ls_m] * (qml[a] * qpl[a]))
+        return np.fft.irfft2(-wtt * self.cls_f['tt'][ls_p] * self.cls_f['tt'][ls_m] * (qml[a] * qpl[a]))
 
     def _get_hf_10_a_w(self, L, a=0):
         r"""Tuned version of real and imaginary part of hf_10_{a} using only rffts
@@ -142,8 +156,8 @@ class n1_ptt:
         """
         wtt, qml, qpl, ls_m, ls_p = self.build_key('ptt', L)
         w = wtt  * 0.5j
-        facp = self.ctt_f[ls_p] * qpl[a]
-        facm = self.ctt_f[ls_m] * qml[a]
+        facp = self.cls_f['tt'][ls_p] * qpl[a]
+        facm = self.cls_f['tt'][ls_m] * qml[a]
         return np.fft.irfft2(w * (facp + facm)), np.fft.irfft2(-1j * w * (facp - facm))
 
     def destroy_key(self, k):

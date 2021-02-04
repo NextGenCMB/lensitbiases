@@ -88,16 +88,17 @@ class box:
         n2y, n2x = np.meshgrid(self.ny_1d ** 2, self.nx_1d ** 2, indexing='ij')
         return self.rsqd2l(n2y + n2x)
 
-    def cos2p_sin2p(self):
+    def cos2p_sin2p(self, rfft=True):
         """Returns the cosines and sines of twice the polar angle
 
         """
-        k2y, k2x = np.meshgrid(self.ny_1d ** 2, self.nx_1d ** 2, indexing='ij')
+        s = self.rshape if rfft else self.shape
+        k2y, k2x = np.meshgrid(self.ny_1d ** 2, (self.nx_1d ** 2 if rfft else self.ny_1d ** 2), indexing='ij')
         k2 = k2y + k2x
-        cos2p = np.ones(self.rshape, dtype=float)
+        cos2p = np.ones(s, dtype=float)
         cos2p[1:] = 2 * k2x[1:] / k2[1:] - 1.
-        sin2p = np.zeros(self.rshape, dtype=float)
-        sin2p[1:] = np.outer(2 * self.ny_1d[1:], self.nx_1d) / k2[1:]
+        sin2p = np.zeros(s, dtype=float)
+        sin2p[1:] = np.outer(2 * self.ny_1d[1:], self.nx_1d if rfft else self.ny_1d) / k2[1:]
         return cos2p, sin2p
 
     def mode_counts(self):
