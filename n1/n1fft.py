@@ -28,8 +28,7 @@ class n1_ptt:
         self.box = n1_utils.box(lside, npix)
 
         # === precalc of deflection corr fct:
-        nx = np.outer(np.ones(self.box.shape[0]), self.box.nx_1d)
-        ny = np.outer(self.box.ny_1d, np.ones(self.box.rshape[1]))
+        ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
 
         self.xipp_00 = np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2)  # 00
