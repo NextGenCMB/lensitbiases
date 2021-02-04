@@ -85,10 +85,20 @@ class box:
         return np.int_(np.round((2. * np.pi / self.lsides[0]) * (np.sqrt(r2))))
 
     def ls(self):
-        r2 = np.outer(self.ny_1d ** 2, np.ones(len(self.nx_1d)))
-        r2 += np.outer(np.ones(len(self.ny_1d)), self.nx_1d ** 2)
-        return self.rsqd2l(r2)
+        n2y, n2x = np.meshgrid(self.ny_1d ** 2, self.nx_1d ** 2, indexing='ij')
+        return self.rsqd2l(n2y + n2x)
 
+    def cos2p_sin2p(self):
+        """Returns the cosines and sines of twice the polar angle
+
+        """
+        k2y, k2x = np.meshgrid(self.ny_1d ** 2, self.nx_1d ** 2, indexing='ij')
+        k2 = k2y + k2x
+        cos2p = np.ones(self.rshape, dtype=float)
+        cos2p[1:] = 2 * k2x[1:] / k2[1:] - 1.
+        sin2p = np.zeros(self.rshape, dtype=float)
+        sin2p[1:] = np.outer(2 * self.ny_1d[1:], self.nx_1d) / k2[1:]
+        return cos2p, sin2p
 
     def mode_counts(self):
         """Mode number counts on the flat-sky patch.

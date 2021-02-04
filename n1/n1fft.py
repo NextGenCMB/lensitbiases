@@ -66,9 +66,7 @@ class n1_ptt:
         npix = self.box.shape[0]
         # new 1d frequencies of q - L, respecting box periodicity:
         ns_y = (npix // 2 + self.box.ny_1d - (L / np.sqrt(2.) / self.box.lminbox)) % npix - npix // 2
-        ly = np.outer(ns_y, np.ones(self.box.rshape[1]))
-        lx = np.outer(np.ones(self.box.rshape[0]), ns_y[:self.box.rshape[1]])
-        return ly, lx
+        return np.meshgrid(ns_y, ns_y[:self.box.rshape[1]], indexing='ij')
 
 
     def build_key(self,k, L):
