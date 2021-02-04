@@ -85,7 +85,7 @@ class n1_ptt:
                 Fw = self.Fls.get('ee', None)
             else:
                 assert 0
-            if self._Ws[k] is None:
+            if self._Ws.get(k, None) is None:
                 assert clw is not None and Fw is not None, 'requires QE weights and filters for ' + k
                 qml = np.array(self._get_shifted_lylx_sym( L * 0.5))  # this is q - L/2
                 qpl = np.array(self._get_shifted_lylx_sym(-L * 0.5))  # this is q + L/2
@@ -162,7 +162,7 @@ class n1_ptt:
 
     def destroy_key(self, k):
         if k == 'ptt':
-            self._wTT = None
+            self._Ws['ptt'] = None
         else:
             assert 0, 'no recipe to destroy ' + k
 
