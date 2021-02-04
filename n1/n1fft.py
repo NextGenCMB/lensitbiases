@@ -182,8 +182,7 @@ class n1_ptt:
         self.destroy_key('ptt')
 
         if do_n1mat:
-            nx = np.outer(np.ones(self.box.shape[0]), self.box.nx_1d)
-            ny = np.outer(self.box.ny_1d, np.ones(self.box.rshape[1]))
+            ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
             f1 = np.fft.rfft2(term1) * ny ** 2
             f2 = np.fft.rfft2(term2) * nx * ny
             n1_mat = -2. / np.prod(self.box.shape) * self.box.sum_in_l(f1.real + f2.real)
