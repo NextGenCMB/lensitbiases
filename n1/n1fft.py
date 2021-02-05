@@ -183,11 +183,11 @@ class n1_ptt:
         """
 
         L = float(L)
-        # --- precalc of some of the rfft'ed maps:)
+
+        # --- precalc of the rfft'ed maps:
         h_00 = self._get_hf_00_w(L)
         re_h_10_y, im_h_10_y = self._get_hf_10_a_w(L, a=0)
         h_11_yy = self._get_hf_11_aa_w(L, a=0)
-        # the other is the transpose
 
         term1 = h_11_yy * h_00 + (re_h_10_y ** 2 - im_h_10_y ** 2)
         term2 = self._get_hf_11_10_w(L) * h_00 + (re_h_10_y * re_h_10_y.T - im_h_10_y * im_h_10_y.T)
