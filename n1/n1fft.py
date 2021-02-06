@@ -37,8 +37,8 @@ class n1_ptt:
 
         # === Filter and cls array needed later on:
         self.Fls   = {k: extcl(self.box.lmaxbox + lminbox, fals[k]) for k in fals.keys()}
-        self.cls_f = {k: extcl(self.box.lmaxbox + lminbox, cls_grad[k]) for k in fals.keys()}    # responses spectra
-        self.cls_w = {k: extcl(self.box.lmaxbox + lminbox, cls_weight[k]) for k in fals.keys()}   # estimator weights spectra
+        self.cls_f = {k: extcl(self.box.lmaxbox + lminbox, cls_grad[k]) for k in cls_grad.keys()}    # responses spectra
+        self.cls_w = {k: extcl(self.box.lmaxbox + lminbox, cls_weight[k]) for k in cls_weight.keys()}   # estimator weights spectra
 
 
         # === normalization (for tt keys at least)
@@ -50,7 +50,7 @@ class n1_ptt:
         self._Ws = dict()
 
 
-    def _get_shifted_lylx_sym(self, L):
+    def _get_shifted_lylx_sym(self, L, rfft=True):
         """Shifts frequencies in both directions
 
             Returns:
@@ -65,8 +65,8 @@ class n1_ptt:
         npix = self.box.shape[0]
         # new 1d frequencies of q - L, respecting box periodicity:
         ns_y = (npix // 2 + self.box.ny_1d - (L / np.sqrt(2.) / self.box.lminbox)) % npix - npix // 2
-        return np.meshgrid(ns_y, ns_y[:self.box.rshape[1]], indexing='ij')
-
+        return np.meshgrid(ns_y, ns_y[:self.box.rshape[1]] if rfft else ns_y, indexing='ij')
+        
 
     def build_key(self, k, L):
         """Builds QE weight function func
@@ -76,32 +76,21 @@ class n1_ptt:
             2 C_{L + q} (L + q) L + 2 C_{L - q} (L - q) L
 
         """
-        if k in ['ptt', 'pee']:
-            if k == 'ptt':
+        if k == 'ptt':
+            if self._Ws.get(k, None) is None:
                 clw = self.cls_w.get('tt', None)
                 Fw = self.Fls.get('tt', None)
-            elif k == 'pee':
-                clw = self.cls_w.get('ee', None)
-                Fw = self.Fls.get('ee', None)
-            else:
-                assert 0
-            if self._Ws.get(k, None) is None:
                 assert clw is not None and Fw is not None, 'requires QE weights and filters for ' + k
-                qml = np.array(self._get_shifted_lylx_sym( L * 0.5))  # this is q - L/2
-                qpl = np.array(self._get_shifted_lylx_sym(-L * 0.5))  # this is q + L/2
+                qml = self._get_shifted_lylx_sym( L * 0.5)  # this is q - L/2
+                qpl = self._get_shifted_lylx_sym(-L * 0.5)  # this is q + L/2
                 ls_m_sqd = qml[0] ** 2 + qml[1] ** 2
                 ls_p_sqd = qpl[0] ** 2 + qpl[1] ** 2
                 ls_m = self.box.rsqd2l(ls_m_sqd)
                 ls_p = self.box.rsqd2l(ls_p_sqd)
                 #TODO: add curl version here as well
-                w = - (clw[ls_p] * ls_p_sqd + clw[ls_m] * ls_m_sqd)
-                w += (clw[ls_p] + clw[ls_m]) * (qpl[0] * qml[0] + qpl[1] * qml[1])
+                w = (clw[ls_p] * ls_p_sqd + clw[ls_m] * ls_m_sqd)
+                w -= (clw[ls_p] + clw[ls_m]) * (qpl[0] * qml[0] + qpl[1] * qml[1])
                 w *= Fw[ls_m] * Fw[ls_p]
-                if k == 'pee':
-                    #FIXME: easiest to the deflection QU etc, since the response fct are the simplest
-                    # must multiply with cos 2 phi_12, 2 * (l1 l2) ** 2 / l1^2 / l2^2 - 1
-                    #NB: this will crash for L = 0
-                    w *= (2 * (qpl[0] * qml[0] + qpl[1] * qml[1]) / ls_p_sqd / ls_m_sqd - 1.)
                 self._Ws[k] = (w, qml, qpl, ls_m, ls_p)
             return self._Ws[k]
         else:

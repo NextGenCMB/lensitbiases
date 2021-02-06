@@ -10,7 +10,7 @@ def extcl(lmax, cl):
         dl = np.zeros(lmax + 1)
         dl[:len(cl)] = cl
     else:
-        dl = cl
+        dl = cl[:lmax+1]
     return dl
 
 def freqs(i, N):

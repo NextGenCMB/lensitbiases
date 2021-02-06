@@ -95,6 +95,15 @@ We can simplify further going to $\bl - \bll/2$, $\bl + \bll/2$, with the same-l
 }
 \end{equation}
 A similar formula holds with the spin-weight transform, where the transpose identites become the complex conjugate operations. (I believe I need complex fft's then though, looks slower)
+
+
+\subsection{Pol and MV}
+Generally, the strategy is as follows:
+\begin{itemize}
+	\item Write the estimators $W^{XY}$ and $W^{IJ}$ in terms of $T,Q,U$, or $_{0, \pm 2}X$.
+	\item The responses then just brings down a factor $i \bl_\alpha C^{st}_{\bl} + \rm{sym}$ (possibly anisotropic if $Q, U$ parametrization).
+\end{itemize}
+
 \subsection{curved-sky}
 On the curved-sky (for spin-0 fields only) one get something similar-looking:
 \begin{equation}
