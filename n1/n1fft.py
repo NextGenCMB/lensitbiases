@@ -66,7 +66,7 @@ class n1_ptt:
         # new 1d frequencies of q - L, respecting box periodicity:
         ns_y = (npix // 2 + self.box.ny_1d - (L / np.sqrt(2.) / self.box.lminbox)) % npix - npix // 2
         return np.meshgrid(ns_y, ns_y[:self.box.rshape[1]] if rfft else ns_y, indexing='ij')
-        
+
 
     def build_key(self, k, L):
         """Builds QE weight function func
@@ -116,7 +116,7 @@ class n1_ptt:
             w *= (self.cls_f['tt'] ** pj)[ls_m]
             for derj in ders_j:
                 w *= qml[derj]
-        return np.fft.irfft2(w)
+        return w
 
     def _get_hf_00_w(self, L):
         r"""Tuned version of hf_00_{}
