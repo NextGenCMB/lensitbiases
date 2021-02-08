@@ -104,6 +104,28 @@ Generally, the strategy is as follows:
 	\item The responses then just brings down a factor $i \bl_\alpha C^{st}_{\bl} + \rm{sym}$ (possibly anisotropic if $Q, U$ parametrization).
 \end{itemize}
 
+So we get:
+\begin{equation}\boxed{
+ \int d\br \:	\xi^{\alpha \beta}(\br) \left[2W^{(ST, 11)}_{\bll, (\alpha, \beta)}(\br)W^{(ST, 00)}_{-\bll,(0,0)}(\br) + 2 W^{(ST, 10)}_{\bll, (\alpha,)}(\br)W^{(ST, 01)}_{-\bll,(,\beta)}(\br)\right]}
+\end{equation}
+where there is a sum (trace) over the Stokes map S, T, and ($X, Y \in (T, E ,B), S, T \in (T, Q, U)$)
+\begin{equation}
+	W^{ST}_{\bl_1,\bl_2} = R^{SX}_{\bl1} C^{1, XY}_{l_1} (R^tR)^{YX'}_{\bl_1,\bl_2} C^{2, X' Y'} R^{T Y'}_{\bl_2}
+\end{equation}
+Each factor brings a $i\bl^a C^{f}_{\bl}$ in the relevant place (outer terms). The Cls involved hence are $C^f \cdot C^w  \cdot F$, $C^f \cdot F$, $F \cdot C^f$, $ C^w \cdot F \cdot C^f$, $F$ and $C^w F$.
+The other matrices are: $R_{\bl}$ the transfer matrix from TEB to TQU:
+\begin{equation} R^{SX}_{\bl} = 
+	\begin{pmatrix}
+		1 & 0 & 0 \\ 0 & \cos 2\phi_{\bl} & -\sin 2\phi_{\bl} \\ 0 & \sin 2\phi_{\bl} & \cos 2\phi_{\bl}
+	\end{pmatrix}_{SX}
+\end{equation}
+and $(R^tR)^{XY}_{\bl_1\bl_2}$
+\begin{equation}
+		\begin{pmatrix}
+		1 & 0 & 0 \\ 0 & \cos 2\phi_{\bl_1\bl_2}= c_1c_2 + s_1 s_2 & \sin 2\phi_{\bl_1\bl_2}= -c_1s_2 + s_1 c_2 \\ 0 & -\sin 2\phi_{\bl_1\bl_2}= c_1s_2 - s_1 c_2 & \cos 2\phi_{\bl_1\bl_2}= c_1c_2 + s_1 s_2
+	\end{pmatrix}_{XY}
+\end{equation}
+
 \subsection{curved-sky}
 On the curved-sky (for spin-0 fields only) one get something similar-looking:
 \begin{equation}

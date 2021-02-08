@@ -59,23 +59,24 @@ def cls_dot(cls_list):
 
 
 
-
-
 class stokes:
-    def __init__(self, box, l1s, l2s):
-        assert len(l1s) == len(l2s) == 2, (len(l1s), len(l2s)) # y (0th axis) and x (1st axis) components
-        assert l1s.shape == l2s.shape
-        self.l1s = l1s
-        self.l2s = l2s
-
-        self.l1_int = box.rsqd2l(np.sum(l1s ** 2, axis=0))
-        self.l2_int = box.rsqd2l(np.sum(l2s ** 2, axis=0))
+    def __init__(self, box, fals, cls_w, cls_f):
 
         self.box = box
-        self.shape = l1s[0].shape
+        self.shape = box.shape
 
 
         self._cos2p_sin2p = None
+
+        # Builds required spectra:
+        self.F_ls = cls_dot([fals])
+        self.wF_ls = cls_dot([cls_w, fals])
+
+        self.fF_ls = cls_dot([cls_f, fals])
+        self.Ff_ls = cls_dot([fals,  cls_f])
+
+        self.fwF_ls = cls_dot([cls_f, cls_w, fals])
+        self.wFf_ls = cls_dot([cls_w, fals,  cls_f])
 
     @staticmethod
     def cos2p_sin2p(ly, lx):
@@ -87,6 +88,28 @@ class stokes:
         """
         r_sqd = lx ** 2 + ly ** 2
         return 2 * lx ** 2 / r_sqd - 1., 2 * lx * ly / r_sqd
+
+    def _get_shifted_lylx_sym(self, L, rfft=True):
+        """Shifts frequencies in both directions
+
+            Returns:
+                frequency maps k_y - L/root(2), k_x - L/root(2)
+
+        """
+        npix = self.box.shape[0]
+        # new 1d frequencies of q - L, respecting box periodicity:
+        ns_y = (npix // 2 + self.box.ny_1d - (L / np.sqrt(2.) / self.box.lminbox)) % npix - npix // 2
+        return np.meshgrid(ns_y, ns_y[:self.box.rshape[1]] if rfft else ns_y, indexing='ij')
+
+
+    def _build_key(self, k, L, rfft=False):
+        l1s = np.array(self._get_shifted_lylx_sym(-L * 0.5, rfft=rfft))  # this is q + L/2
+        l2s = np.array(self._get_shifted_lylx_sym (L * 0.5, rfft=rfft))  # this is q - L/2
+        self.l1s = l1s
+        self.l2s = l2s
+        self.l1_int = self.box.rsqd2l(np.sum(l1s ** 2, axis=0))
+        self.l2_int = self.box.rsqd2l(np.sum(l2s ** 2, axis=0))
+        self.cos2p_sin2p_2v()
 
     def cos2p_sin2p_2v(self):
         """Returns the cosines and sines of twice the angle between the two maps of vectors
@@ -142,7 +165,7 @@ class stokes:
             return self.cos2p_sin2p_2v()[0] # same as c1 * c1 + s1 * s2 = cos2p_12
         return (1 if X == 'B' else -1) * self.cos2p_sin2p_2v()[1]# same as -+ (c1 s2 - s1 c2) = -+ sin_2p_12:
 
-    def W_ST(self, S, T, fals, cls_w, cls_f, _symmetrize=True, ders_1=None, ders_2=None):
+    def W_ST(self, S, T,  ders_1=None, ders_2=None):
         """Stokes QE weight function for Stokes parameter S T
 
             Note:
@@ -164,31 +187,22 @@ class stokes:
         for X in ['T'] if S == 'T' else ['E', 'B']:
             RSX_1 = self.X2S(S, X, 1)
             for Y in ['T', 'E', 'B']:
-                cls1_list_1 = [cls_w, fals]
-                cls1_list_2 = [fals] # Cls when the ilCl is on the RHS of the QE W
                 if ders_1 is not None:
-                    cls1_list_1.insert(0, cls_f) # Response Cls on the edges
-                    cls1_list_2.insert(0, cls_f)
-                    cl_XY_1 = cls_dot(cls1_list_1)[X2i[X], X2i[Y]][self.l1_int] * (self.l1s[ders_1])
-                    cl_XY_2 = cls_dot(cls1_list_2)[X2i[X], X2i[Y]][self.l1_int] * (self.l1s[ders_1])
+                    cl_XY_1 = self.fwF_ls[X2i[X], X2i[Y]][self.l1_int] * (self.l1s[ders_1])
+                    cl_XY_2 = self.fF_ls[ X2i[X], X2i[Y]][self.l1_int] * (self.l1s[ders_1])
                 else:
-                    cl_XY_1 = cls_dot(cls1_list_1)[X2i[X], X2i[Y]][self.l1_int]
-                    cl_XY_2 = cls_dot(cls1_list_2)[X2i[X], X2i[Y]][self.l1_int]
-
+                    cl_XY_1 = self.wF_ls[X2i[X], X2i[Y]][self.l1_int]
+                    cl_XY_2 = self.F_ls[ X2i[X], X2i[Y]][self.l1_int]
                 for Xp in (['T'] if Y == 'T' else ['E', 'B']):
                     RtR_YXp = self.X2Y(Y, Xp)
                     for Yp in ['T'] if T == 'T' else ['E', 'B']:
-                        cls2_list_1 = [fals]
-                        cls2_list_2 = [cls_w, fals]
                         if ders_2 is not None:
-                            cls2_list_1.append(cls_f)
-                            cls2_list_2.append(cls_f)
-                            cl_XpYp_1 = cls_dot(cls2_list_1)[X2i[Xp], X2i[Yp]][self.l2_int] * (self.l2s[ders_2])
-                            cl_XpYp_2 = cls_dot(cls2_list_2)[X2i[Xp], X2i[Yp]][self.l2_int] * (self.l2s[ders_2])
+                            cl_XpYp_1 = self.wF_ls[ X2i[Xp], X2i[Yp]][self.l2_int] * (self.l2s[ders_2])
+                            cl_XpYp_2 = self.wFf_ls[X2i[Xp], X2i[Yp]][self.l2_int] * (self.l2s[ders_2])
 
                         else:
-                            cl_XpYp_1 =  cls_dot(cls2_list_1)[X2i[Xp], X2i[Yp]][self.l2_int]
-                            cl_XpYp_2 =  cls_dot(cls2_list_2)[X2i[Xp], X2i[Yp]][self.l2_int]
+                            cl_XpYp_1 =  self.F_ls[ X2i[Xp], X2i[Yp]][self.l2_int]
+                            cl_XpYp_2 =  self.wF_ls[X2i[Xp], X2i[Yp]][self.l2_int]
 
                         RTYp_2 = self.X2S(T, Yp, 2)
 
