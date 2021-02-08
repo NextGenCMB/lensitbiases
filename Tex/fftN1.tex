@@ -112,7 +112,7 @@ where there is a sum (trace) over the Stokes map S, T, and ($X, Y \in (T, E ,B),
 \begin{equation}
 	W^{ST, (00)}_{\bl_1,\bl_2} = R^{SX}_{\bl1} C^{1, XY}_{l_1} (R^tR)^{YX'}_{\bl_1,\bl_2} C_{l_2}^{2, X' Y'} R^{T Y'}_{\bl_2}
 \end{equation}
-Each factor brings a $i\bl^a C^{f}_{\bl}$ in the relevant place (outer terms). The Cls involved hence are $C^f \cdot C^w  \cdot F$, $C^f \cdot F$, $F \cdot C^f$, $ C^w \cdot F \cdot C^f$, $F$ and $C^w F$.
+(There are two terms in this sum, one here the $C^{w}$ acts on $\bl_1$ and one where it acts on $\bl_2$). Each factor brings a $i\bl^a C^{f}_{\bl}$ in the relevant place (outer terms). The Cls involved hence are $C^f \cdot C^w  \cdot F$, $C^f \cdot F$, $F \cdot C^f$, $ C^w \cdot F \cdot C^f$, $F$ and $C^w F$. \color{red} should F and w be reversed in the second term? does not like symmtric in this form \color{black}
 The other matrices are: $R_{\bl}$ the transfer matrix from TEB to TQU:
 \begin{equation} R^{SX}_{\bl} = 
 	\begin{pmatrix}
@@ -125,7 +125,10 @@ and $(R^tR)^{XY}_{\bl_1\bl_2}$
 		1 & 0 & 0 \\ 0 & \cos 2\phi_{\bl_1\bl_2}= c_1c_2 + s_1 s_2 & \sin 2\phi_{\bl_1\bl_2}= -c_1s_2 + s_1 c_2 \\ 0 & -\sin 2\phi_{\bl_1\bl_2}= c_1s_2 - s_1 c_2 & \cos 2\phi_{\bl_1\bl_2}= c_1c_2 + s_1 s_2
 	\end{pmatrix}_{XY}
 \end{equation}
-
+Since each $W_{\bll}^{ST}$ by construction is symmetric in $\bl_1 = \bl + \bll/2, \bl_2 = \bl - \bll /2$, we have the following symmetries:
+\begin{equation}
+	W_{\bll}^{ST, (0,0)} = W_{\bll}^{TS, (0,0)}
+\end{equation}
 \subsection{curved-sky}
 On the curved-sky (for spin-0 fields only) one get something similar-looking:
 \begin{equation}

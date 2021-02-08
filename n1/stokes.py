@@ -71,12 +71,13 @@ class stokes:
         # Builds required spectra:
         self.F_ls = cls_dot([fals])
         self.wF_ls = cls_dot([cls_w, fals])
+        self.Fw_ls = cls_dot([fals, cls_w])
 
         self.fF_ls = cls_dot([cls_f, fals])
         self.Ff_ls = cls_dot([fals,  cls_f])
 
-        self.fwF_ls = cls_dot([cls_f, cls_w, fals])
-        self.wFf_ls = cls_dot([cls_w, fals,  cls_f])
+        self.fFw_ls = cls_dot([cls_f, fals, cls_w])
+        self.wFf_ls = cls_dot([cls_w, fals, cls_f])
 
     @staticmethod
     def cos2p_sin2p(ly, lx):
@@ -188,16 +189,16 @@ class stokes:
             RSX_1 = self.X2S(S, X, 1)
             for Y in ['T', 'E', 'B']:
                 if ders_1 is not None:
-                    cl_XY_1 = self.fwF_ls[X2i[X], X2i[Y]][self.l1_int] * (self.l1s[ders_1])
+                    cl_XY_1 = self.fFw_ls[X2i[X], X2i[Y]][self.l1_int] * (self.l1s[ders_1]) # wFf transpose..
                     cl_XY_2 = self.fF_ls[ X2i[X], X2i[Y]][self.l1_int] * (self.l1s[ders_1])
                 else:
-                    cl_XY_1 = self.wF_ls[X2i[X], X2i[Y]][self.l1_int]
+                    cl_XY_1 = self.Fw_ls[X2i[X], X2i[Y]][self.l1_int]
                     cl_XY_2 = self.F_ls[ X2i[X], X2i[Y]][self.l1_int]
                 for Xp in (['T'] if Y == 'T' else ['E', 'B']):
                     RtR_YXp = self.X2Y(Y, Xp)
                     for Yp in ['T'] if T == 'T' else ['E', 'B']:
                         if ders_2 is not None:
-                            cl_XpYp_1 = self.wF_ls[ X2i[Xp], X2i[Yp]][self.l2_int] * (self.l2s[ders_2])
+                            cl_XpYp_1 = self.Ff_ls[ X2i[Xp], X2i[Yp]][self.l2_int] * (self.l2s[ders_2])
                             cl_XpYp_2 = self.wFf_ls[X2i[Xp], X2i[Yp]][self.l2_int] * (self.l2s[ders_2])
 
                         else:
@@ -226,4 +227,4 @@ class stokes:
         W1 = i_sign * W1
         W2 = i_sign * W2
 
-        return W1 + W2, W1, W2
+        return W1 + W2#, W1, W2
