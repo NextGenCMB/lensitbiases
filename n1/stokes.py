@@ -166,7 +166,7 @@ class stokes:
             return self.cos2p_sin2p_2v()[0] # same as c1 * c1 + s1 * s2 = cos2p_12
         return (1 if X == 'B' else -1) * self.cos2p_sin2p_2v()[1]# same as -+ (c1 s2 - s1 c2) = -+ sin_2p_12:
 
-    def W_ST(self, S, T,  ders_1=None, ders_2=None):
+    def W_ST(self, S, T,  ders_1=None, ders_2=None, verbose=True):
         """Stokes QE weight function for Stokes parameter S T
 
             Note:
@@ -214,9 +214,9 @@ class stokes:
                         W1 += term1
                         W2 += term2
 
-                        if np.any(term1):
+                        if verbose and np.any(term1):
                             print('term1 ' + X + Y + ' ' + Xp + Yp)
-                        if np.any(term2):
+                        if verbose and np.any(term2):
                             print('term2 ' + X + Y + ' ' + Xp + Yp)
 
 
@@ -228,3 +228,116 @@ class stokes:
         W2 = i_sign * W2
 
         return W1 + W2#, W1, W2
+
+
+
+def _test_symmetries():
+    """This tests:
+
+        - W_{-L}^{ST} = W_{+L}^{TS} for all T, S and MV weights
+        - W_{-L}^{ST, (0, 1)} = W_{+L}^{TS, (1, 0)} for all T, S and MV weights
+    """
+    from n1 import n1fft, n1devel, n1_utils
+    import os
+    from plancklens import utils
+
+    cls_grad = utils.camb_clfile(os.path.join(n1devel.CLS, 'FFP10_wdipole_gradlensedCls.dat'))
+    cls_unl = utils.camb_clfile(os.path.join(n1devel.CLS, 'FFP10_wdipole_lenspotentialCls.dat'))
+
+    cls_weights = utils.camb_clfile(os.path.join(n1devel.CLS, 'FFP10_wdipole_gradlensedCls.dat'))
+    L = 299.
+    for jt_TP in [False, True]:
+        fal = n1_utils.get_fal(jt_tp=jt_TP)[1]
+        lib = n1fft.n1_ptt(fal, cls_weights, cls_grad, cls_unl['pp'], lminbox=50, lmaxbox=2500)
+        for S in ['T', 'Q', 'U']:
+            for T in ['T', 'Q', 'U']:
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p',  L)
+                WST = slib.W_ST(T, S, verbose=False)
+
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', -L)
+                WTS = slib.W_ST(S, T, verbose=False)
+                print('%.3e'%np.max(np.abs(WTS - WST)) , S, T, np.any(WST), 'jt_TP:',jt_TP)
+
+    print("# *** with 1 derivative: **** ")
+    for jt_TP in [False, True]:
+        fal = n1_utils.get_fal(jt_tp=jt_TP)[1]
+        lib = n1fft.n1_ptt(fal, cls_weights, cls_grad, cls_unl['pp'], lminbox=50, lmaxbox=2500)
+        for S in ['T', 'Q', 'U']:
+            for T in ['T', 'Q', 'U']:
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', L)
+                WST = slib.W_ST(T, S, ders_1=0, verbose=False)
+
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', -L)
+                WTS = slib.W_ST(S, T, ders_2=0, verbose=False)
+                print('(, 0) %.3e' % np.max(np.abs(WTS - WST)), S, T, np.any(WST), 'jt_TP:', jt_TP)
+    for jt_TP in [False, True]:
+        fal = n1_utils.get_fal(jt_tp=jt_TP)[1]
+        lib = n1fft.n1_ptt(fal, cls_weights, cls_grad, cls_unl['pp'], lminbox=50, lmaxbox=2500)
+        for S in ['T', 'Q', 'U']:
+            for T in ['T', 'Q', 'U']:
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', L)
+                WST = slib.W_ST(T, S, ders_1=1, verbose=False)
+
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', -L)
+                WTS = slib.W_ST(S, T, ders_2=1, verbose=False)
+                print('(, 1) %.3e' % np.max(np.abs(WTS - WST)), S, T, np.any(WST), 'jt_TP:', jt_TP)
+
+    print("# *** with 2 derivatives: **** ")
+    for jt_TP in [False, True]:
+        fal = n1_utils.get_fal(jt_tp=jt_TP)[1]
+        lib = n1fft.n1_ptt(fal, cls_weights, cls_grad, cls_unl['pp'], lminbox=50, lmaxbox=2500)
+        for S in ['T', 'Q', 'U']:
+            for T in ['T', 'Q', 'U']:
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', L)
+                WST = slib.W_ST(T, S, ders_1=1, ders_2=0, verbose=False)
+
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', -L)
+                WTS = slib.W_ST(S, T, ders_1=0, ders_2=1, verbose=False)
+                print('(0, 1) %.3e' % np.max(np.abs(WTS - WST)), S, T, np.any(WST), 'jt_TP:', jt_TP)
+    for jt_TP in [False, True]:
+        fal = n1_utils.get_fal(jt_tp=jt_TP)[1]
+        lib = n1fft.n1_ptt(fal, cls_weights, cls_grad, cls_unl['pp'], lminbox=50, lmaxbox=2500)
+        for S in ['T', 'Q', 'U']:
+            for T in ['T', 'Q', 'U']:
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', L)
+                WST = slib.W_ST(T, S, ders_1=1, ders_2=1, verbose=False)
+
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', -L)
+                WTS = slib.W_ST(S, T, ders_1=1, ders_2=1, verbose=False)
+                print('(1, 1) %.3e' % np.max(np.abs(WTS - WST)), S, T, np.any(WST), 'jt_TP:', jt_TP)
+    for jt_TP in [False, True]:
+        fal = n1_utils.get_fal(jt_tp=jt_TP)[1]
+        lib = n1fft.n1_ptt(fal, cls_weights, cls_grad, cls_unl['pp'], lminbox=50, lmaxbox=2500)
+        for S in ['T', 'Q', 'U']:
+            for T in ['T', 'Q', 'U']:
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', L)
+                WST = slib.W_ST(T, S, ders_1=0, ders_2=1, verbose=False)
+
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', -L)
+                WTS = slib.W_ST(S, T, ders_1=1, ders_2=0, verbose=False)
+                print('(1, 0) %.3e' % np.max(np.abs(WTS - WST)), S, T, np.any(WST), 'jt_TP:', jt_TP)
+    for jt_TP in [False, True]:
+        fal = n1_utils.get_fal(jt_tp=jt_TP)[1]
+        lib = n1fft.n1_ptt(fal, cls_weights, cls_grad, cls_unl['pp'], lminbox=50, lmaxbox=2500)
+        for S in ['T', 'Q', 'U']:
+            for T in ['T', 'Q', 'U']:
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', L)
+                WST = slib.W_ST(T, S, ders_1=0, ders_2=0, verbose=False)
+
+                slib = stokes(lib.box, lib.Fls, lib.cls_w, lib.cls_f)
+                slib._build_key('p_p', -L)
+                WTS = slib.W_ST(S, T, ders_1=0, ders_2=0, verbose=False)
+                print('(0, 0) %.3e' % np.max(np.abs(WTS - WST)), S, T, np.any(WST), 'jt_TP:', jt_TP)

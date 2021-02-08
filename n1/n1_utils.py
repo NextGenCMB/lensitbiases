@@ -42,6 +42,21 @@ def rfft2_reals(shape):
         fy.append(N1 // 2)
     return np.array(fx), np.array(fy)
 
+def get_fal(jt_tp=False):
+    from plancklens.patchy import patchy
+    from plancklens import utils
+    import healpy as hp
+    import os
+    lmax_ivf = 2048
+    lmin_ivf = 100
+    nlevt = 35.
+    nlevp = 55.
+    beam = 6.5
+    cls_len = utils.camb_clfile(os.path.join('../../plancklens/plancklens/data/cls/', 'FFP10_wdipole_lensedCls.dat'))
+    transf = hp.gauss_beam(beam / 60 / 180 * np.pi, lmax=lmax_ivf)
+    ivcl, fal = patchy.get_ivf_cls(cls_len, cls_len, lmin_ivf, lmax_ivf, nlevt, nlevp, nlevt, nlevp, transf,
+                                   jt_tp=jt_tp)
+    return ivcl, fal, lmax_ivf
 
 class box:
     def __init__(self, lside, npix):
