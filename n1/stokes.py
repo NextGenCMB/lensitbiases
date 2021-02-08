@@ -25,7 +25,7 @@ r"""One must multiply W^ST W^{SpTp}   (XY IJ in original notation) by f^{SSp}_{l
 
 """
 import numpy as np
-from n1.n1_utils import extcl
+from n1.n1_utils import extcl, box
 
 def _cldict2arr(cls_dict):
     lmaxp1 = np.max([len(cl) for cl in cls_dict.values()])
@@ -60,15 +60,26 @@ def cls_dot(cls_list):
 
 
 class stokes:
-    def __init__(self, box, fals, cls_w, cls_f):
+    def __init__(self, fals, cls_w, cls_f, cpp, lminbox=50, lmaxbox=2500):
 
-        self.box = box
-        self.shape = box.shape
+        lside = 2. * np.pi / lminbox
+        npix = int(lmaxbox / np.pi * lside) + 1
+        if npix % 2 == 1: npix += 1
+
+        #===== instance with 2D flat-sky box info
+        self.box = box(lside, npix)
+        self.shape = self.box.shape
 
 
         self._cos2p_sin2p = None
 
-        # Builds required spectra:
+        #==== Builds required spectra:
+        # === Filter and cls array needed later on:
+        fals   = {k: extcl(self.box.lmaxbox + lminbox, fals[k]) for k in fals.keys()}
+        cls_f = {k: extcl(self.box.lmaxbox + lminbox, cls_f[k]) for k in cls_f.keys()}    # responses spectra
+        cls_w = {k: extcl(self.box.lmaxbox + lminbox, cls_w[k]) for k in cls_w.keys()}   # estimator weights spectra
+
+
         self.F_ls = cls_dot([fals])
         self.wF_ls = cls_dot([cls_w, fals])
         self.Fw_ls = cls_dot([fals, cls_w])
@@ -78,6 +89,25 @@ class stokes:
 
         self.fFw_ls = cls_dot([cls_f, fals, cls_w])
         self.wFf_ls = cls_dot([cls_w, fals, cls_f])
+
+        # === precalc of deflection corr fct:
+        ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
+        ls = self.box.ls()
+
+        self.xipp = np.zeros((2, 2, self.shape[0], self.shape[1]))
+        self.xipp[0,0] = np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2)  # 00
+        self.xipp[1,0]= np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny)  # 01 or 10
+        self.xipp[0,1] = np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny)  # 01 or 10
+        self.xipp[1,1] = np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2)  # 01 or 10
+
+        del nx, ny, ls
+
+        # === normalization (for tt keys at least)
+        norm = (self.box.shape[0] / self.box.lsides[0]) ** 4  # overall final normalization from rfft'ing
+        norm *= (float(self.box.lminbox)) ** 8
+        # :always 2 powers in xi_ab, 4 powers of ik_x or ik_y in XY and IJ weights, and two add. powers matching xi_ab's from the responses
+        self.norm = norm
+
 
     @staticmethod
     def cos2p_sin2p(ly, lx):
@@ -166,7 +196,7 @@ class stokes:
             return self.cos2p_sin2p_2v()[0] # same as c1 * c1 + s1 * s2 = cos2p_12
         return (1 if X == 'B' else -1) * self.cos2p_sin2p_2v()[1]# same as -+ (c1 s2 - s1 c2) = -+ sin_2p_12:
 
-    def W_ST(self, S, T,  ders_1=None, ders_2=None, verbose=True):
+    def W_ST(self, S, T,  ders_1=None, ders_2=None, verbose=False):
         """Stokes QE weight function for Stokes parameter S T
 
             Note:
@@ -220,10 +250,29 @@ class stokes:
                             print('term2 ' + X + Y + ' ' + Xp + Yp)
 
 
-        W1 *= np.sum( (self.l1s - self.l2s) * self.l1s, axis=0)
-        W2 *= np.sum( (self.l2s - self.l1s) * self.l2s, axis=0)
+        W1 *= np.sum( (self.l1s + self.l2s) * self.l1s, axis=0)
+        W2 *= np.sum( (self.l2s + self.l1s) * self.l2s, axis=0)
         i_sign = 1j  ** (ders_1 is not None) * 1j ** (ders_2 is not None)
         W1 = i_sign * W1
         W2 = i_sign * W2
 
         return W1 + W2#, W1, W2
+
+
+    def get_n1(self, L):
+        L = float(L)
+
+        self._build_key(None, L, rfft=False)
+        # --- precalc of the rfft'ed maps:
+        n1 = 0.
+        for a in [0, 1]:
+            for b in [0, 1]:
+                term1 = 0j
+                term2 = 0j
+                for T in ['T', 'Q', 'U']:
+                    for S in ['T', 'Q', 'U']:
+                        term1 += np.fft.ifft2(self.W_ST(T, S, ders_1=a, ders_2=a)) *  np.fft.ifft2(self.W_ST(S, T))
+                        term2 += np.fft.ifft2(self.W_ST(T, S, ders_1=a)) * np.fft.ifft2(self.W_ST(S, T, ders_1=a))
+                n1 += np.sum(self.xipp[a, b] * (term1 - term2))
+
+        return -self.norm * n1
