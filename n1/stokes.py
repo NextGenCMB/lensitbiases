@@ -254,9 +254,9 @@ class stokes:
                 W2[1] += self.X2S('U', X, 1)  * self.X2S('U', Yp, 2) * term2
                 W2[2] += self.X2S('Q', X, 1)  * self.X2S('U', Yp, 2) * term2
                 W2[3] += self.X2S('U', X, 1)  * self.X2S('Q', Yp, 2) * term2
-                if verbose and np.any(term1):
+                if verbose:
                     print('term1 ' + X + Y + ' ' + Xp + Yp + ' empty! ' * (not np.any(term1)))
-                if verbose and np.any(term2):
+                if verbose:
                     print('term2 ' + X + Y + ' ' + Xp + Yp + ' empty! ' * (not np.any(term1)))
 
         W1 *= np.sum((self.l1s + self.l2s) * self.l1s, axis=0)
