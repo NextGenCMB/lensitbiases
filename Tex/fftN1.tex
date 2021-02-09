@@ -125,12 +125,27 @@ and $(R^tR)^{XY}_{\bl_1\bl_2}$
 		1 & 0 & 0 \\ 0 & \cos 2\phi_{\bl_1\bl_2}= c_1c_2 + s_1 s_2 & \sin 2\phi_{\bl_1\bl_2}= -c_1s_2 + s_1 c_2 \\ 0 & -\sin 2\phi_{\bl_1\bl_2}= c_1s_2 - s_1 c_2 & \cos 2\phi_{\bl_1\bl_2}= c_1c_2 + s_1 s_2
 	\end{pmatrix}_{XY}
 \end{equation}
-Since each $W_{\bll}^{ST}$ by construction is symmetric in $\bl_1 = \bl + \bll/2, \bl_2 = \bl - \bll /2$, we have the following symmetries:
+Since each $W_{\bll}^{ST}$ by construction is symmetric in $\bl_1 = \bl + \bll/2, \bl_2 = \bll /2 - \bl$, we have the following symmetries:
 \begin{equation}
-	W_{-\bll}^{ST, (\alpha,\beta)} = W_{+\bll}^{TS, (\beta,\alpha)}
-\end{equation}
-\color{red} Not sure of the implication of my using $\bl_2 = \bl - \bll/2$ instead of $\bl_2 = \bll/2 - \bl$ for the trigo factors. If using the second version (probably better) this still holds
+\begin{split}
+  W_{-\bll}^{ST, (,)} &= W_{+\bll}^{TS, (,)}\\
+	W_{-\bll}^{ST, (\alpha,\beta)} &= W_{+\bll}^{TS, (\beta,\alpha)}, \\
+	W_{-\bll}^{ST, (,\alpha)} &= -W_{+\bll}^{TS, (\alpha,)} \\
+	W_{+\bll}^{ST, (1,)}(r_0, r_1) &= \left( (-1)^{ (T=Q) + (S = Q)}\right)W_{+\bll}^{ST, (0,)}(r_1, r_0) \quad (\textrm{ no EB, TB, L }\propto (1,1))\\
+	\color{red}
+\textrm{a tester:} W^{QU}(\br) &= W^{UQ}(\br \textrm{ for real part of } \br^t \textrm{for imag}. W^{QQ}, W^{UU} \textrm{seems independent but are real})
 \color{black}
+\end{split}
+\end{equation}
+\newcommand{\real}[1]{ \Re {\left\{#1\right\}}}
+We have for Pol:
+\begin{equation}
+\boxed{
+\begin{split}
+	&2 \xi^{00} \left[ \left(QQ\right)_0^2 + \left(UU\right)_0^2 + 2\left(QU\right)_0\left(UQ\right)_0 \right] \\+ &2 \xi^{01}\left[ \left(QQ\right)_0\left(QQ\right)^t_0  + \left(UU\right)_0\left(UU\right)^t_0-2\left(QU\right)_0\left(UQ\right)^t_0 \right] \\
+	+& 2\xi^{00} \left[ (QQ)_{0,0}(QQ)  + (UU)_{0,0}(UU) + 2  \Re\left\{(QU)_{0,0}(UQ)\right\}\right] \\ +& \xi^{01} \left[ \real{(QQ)_{0,1}}(QQ)  + \real{(UU)_{0,1}}(UU) + 2  \real{(QU)_{0,1}(UQ)}\right]
+\end{split}}
+\end{equation}
 
 
 \subsection{curved-sky}
