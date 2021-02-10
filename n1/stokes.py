@@ -207,12 +207,14 @@ class stokes:
             return self.cos2p_sin2p_2v()[0] # same as c1 * c1 + s1 * s2 = cos2p_12
         return (1 if X == 'B' else -1) * self.cos2p_sin2p_2v()[1]# same as -+ (c1 s2 - s1 c2) = -+ sin_2p_12:
 
+
     def W_ST_Pol(self, verbose=False):
         """Same as W_ST but returns all Stokes weights in one go
 
             Returns: QQ, UU , QU and UQ
 
         """
+        #TODO: extend to the case of joint-TP
         s = self.l1_int.shape
         W1_zz = np.zeros((4, s[0], s[1]), dtype=float)  # QQ, UU  QU re, QU im
         W2_zz = np.zeros((4, s[0], s[1]), dtype=float)  # terms of QE with Cl weight on l1 leg
@@ -468,7 +470,7 @@ class stokes:
                     n1 += np.sum(xipp * (term1 - term2))
 
         elif optimize == 2:
-            # 19 rfft's instead of 5 for T.
+            # 20 rfft's instead of 5 for T.
             # For small boxes though the building of the weights can be more than the FFT's
             self._build_key(k, L, rfft=_rfft)
             ift = np.fft.irfft2 if _rfft else np.fft.ifft2
