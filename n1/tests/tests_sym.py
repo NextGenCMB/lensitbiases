@@ -17,7 +17,6 @@ def prepare_cls(k, jt_TP=False):
         fals['tt'] *= 0.
     if k in ['ptt', 'p_p']:
         cls_weights['te'] *= 0.
-        cls_grad['te'] *= 0.
     return fals, cls_weights, cls_grad, cls_unl['pp']
 
 
@@ -115,7 +114,7 @@ def rfft_map_building_pol():
 def test_symmetries():
     """This tests:
 
-        - W_{-L}^{ST} = W_{+L}^{TS} for all T, S and MV weights
+        - W_{-L}^{ST} = W_{+L}^{TS} for all T, S and all weights (because of changing l sign is same as swapping l1 and l2)
         - W_{-L}^{ST, (0, 1)} = (-1) W_{+L}^{TS, (1, 0)} for all T, S and MV weights
     """
     from n1 import n1fft, n1devel, n1_utils
