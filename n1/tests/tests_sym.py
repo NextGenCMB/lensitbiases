@@ -67,6 +67,51 @@ def test_transpose(k, L):
 
 
 
+def rfft_map_building_pol():
+    k = 'p_p'
+    jt_TP = False
+    fals, cls_weights, cls_grad, cpp = prepare_cls(k, jt_TP=jt_TP)
+    slib = stokes.stokes(fals, cls_weights, cls_grad, cpp)
+    L = 200.
+    rfft = True
+    slib._build_key('p_p', L, rfft=rfft)
+    ift2 =  np.fft.ifft2 if not rfft else  np.fft.irfft2
+
+    W_zz, W_00, W_0_re, W_0_im, W_01 = ift2(np.array(slib.W_ST_Polv2()))
+    slib._build_key('p_p', L, rfft=False)
+    # ====== tests W_zz
+    QQ, UU, QU_re, QU_im = W_zz
+    print(np.max(np.abs(QQ - np.fft.ifft2(slib.W_ST('Q', 'Q')))),
+    np.max(np.abs(UU - np.fft.ifft2(slib.W_ST('U', 'U')))),
+    np.max(np.abs(QU_re - np.fft.ifft2(slib.W_ST('Q', 'U')).real)),
+    np.max(np.abs(QU_im - np.fft.ifft2(slib.W_ST('Q', 'U')).imag)))
+    # ====== tests W_00
+    QQ00, UU00, QU00_re, QU00_im = W_00
+    print(np.max(np.abs(QQ00 - np.fft.ifft2(slib.W_ST('Q', 'Q', ders_1=0, ders_2=0)).real)),
+    np.max(np.abs(UU00 - np.fft.ifft2(slib.W_ST('U', 'U', ders_1=0, ders_2=0)))),
+    np.max(np.abs(QU00_re - np.fft.ifft2(slib.W_ST('Q', 'U', ders_1=0, ders_2=0)).real)),
+    np.max(np.abs(QU00_im - np.fft.ifft2(slib.W_ST('Q', 'U', ders_1=0, ders_2=0)).imag)))
+
+    # ====== tests W_01
+    QQ01_re, UU01_re, QU01_re, QU01_im = W_01
+    print(np.max(np.abs(QQ01_re - np.fft.ifft2(slib.W_ST('Q', 'Q', ders_1=0, ders_2=1)).real)),
+    np.max(np.abs(UU01_re - np.fft.ifft2(slib.W_ST('U', 'U', ders_1=0, ders_2=1)).real)),
+    np.max(np.abs(QU01_re - np.fft.ifft2(slib.W_ST('Q', 'U', ders_1=0, ders_2=1)).real)),
+    np.max(np.abs(QU01_im - np.fft.ifft2(slib.W_ST('Q', 'U', ders_1=0, ders_2=1)).imag)))
+    #===== tests W_0_re
+    QQ0_re, UU0_re, QU0_re, UQ0_re = W_0_re
+    print(np.max(np.abs(QQ0_re - np.fft.ifft2(slib.W_ST('Q', 'Q', ders_1=0, ders_2=None)).real)),
+    np.max(np.abs(UU0_re - np.fft.ifft2(slib.W_ST('U', 'U', ders_1=0, ders_2=None)).real)),
+    np.max(np.abs(QU0_re - np.fft.ifft2(slib.W_ST('Q', 'U', ders_1=0, ders_2=None)).real)),
+    np.max(np.abs(UQ0_re - np.fft.ifft2(slib.W_ST('U', 'Q', ders_1=0, ders_2=None)).real)))
+
+    #===== tests W_0_im
+    QQ0_im, UU0_im, QU0_im, UQ0_im = W_0_im
+    print(np.max(np.abs(QQ0_im - np.fft.ifft2(slib.W_ST('Q', 'Q', ders_1=0, ders_2=None)).imag)),
+    np.max(np.abs(UU0_im - np.fft.ifft2(slib.W_ST('U', 'U', ders_1=0, ders_2=None)).imag)),
+    np.max(np.abs(QU0_im - np.fft.ifft2(slib.W_ST('Q', 'U', ders_1=0, ders_2=None)).imag)),
+    np.max(np.abs(UQ0_im - np.fft.ifft2(slib.W_ST('U', 'Q', ders_1=0, ders_2=None)).imag)))
+
 def test_symmetries():
     """This tests:
 

@@ -80,9 +80,9 @@ class stokes:
         cls_w = {k: extcl(self.box.lmaxbox + lminbox, cls_w[k]) for k in cls_w.keys()}   # estimator weights spectra
 
 
-        self.fals = fals
-        self.cls_f = cls_f
-        self.cls_w = cls_w
+        #self.fals = fals
+        #self.cls_f = cls_f
+        #self.cls_w = cls_w
 
         self.F_ls = cls_dot([fals])
         self.wF_ls = cls_dot([cls_w, fals])
@@ -142,15 +142,18 @@ class stokes:
     def _build_key(self, k, L, rfft=False):
         l1s =  np.array(self._get_shifted_lylx_sym(-L * 0.5, rfft=rfft))  # this is q + L/2
         l2s = -np.array(self._get_shifted_lylx_sym (L * 0.5, rfft=rfft))  # this is -(q - L/2) = L/2 - q
-        self.l1s = l1s
-        self.l2s = l2s
-        self.l1_int = self.box.rsqd2l(np.sum(l1s ** 2, axis=0))
-        self.l2_int = self.box.rsqd2l(np.sum(l2s ** 2, axis=0))
         r1sqd_r2sqd = np.sum(l1s ** 2, axis=0) * np.sum(l2s ** 2, axis=0)
         dotp = np.sum(l1s * l2s, axis=0)
         cos2p = 2 * dotp ** 2 / r1sqd_r2sqd - 1.
         sin2p = 2 * dotp * (l2s[1] * l1s[0] - l2s[0] * l1s[1]) / r1sqd_r2sqd
-        self._cos2p_sin2p = (cos2p, sin2p)        #if k in ['p_p', 'p']:
+
+        self.l1s = l1s
+        self.l2s = l2s
+        self.l1_int = self.box.rsqd2l(np.sum(l1s ** 2, axis=0))
+        self.l2_int = self.box.rsqd2l(np.sum(l2s ** 2, axis=0))
+        self._cos2p_sin2p = (cos2p, sin2p)
+        self._cos2p_sin2p_v1 = {1: self.cos2p_sin2p(l1s), 2: self.cos2p_sin2p(l2s)}
+        #if k in ['p_p', 'p']:
         #    self.X2S('Q', 'E', 1)
 
     def _destroy_key(self, k):
@@ -275,7 +278,7 @@ class stokes:
 
         """
         s = self.l1_int.shape
-        W1_zz = np.zeros((4, s[0], s[1]), dtype=float)  # terms of QE with Cl weight on l1 leg
+        W1_zz = np.zeros((4, s[0], s[1]), dtype=float)  # QQ, UU  QU re, QU im
         W2_zz = np.zeros((4, s[0], s[1]), dtype=float)  # terms of QE with Cl weight on l1 leg
 
         W1_00 = np.zeros((4, s[0], s[1]), dtype=float)  # QQ_00, UU_00, QU_00 re and im
@@ -313,14 +316,16 @@ class stokes:
                 cl_XpYp_1_0 = self.Ff_ls[X2i[Xp], X2i[Yp]]
                 cl_XpYp_2_0 = self.wFf_ls[X2i[Xp], X2i[Yp]]
 
-                term1 = RtR_YXp * cl_XY_1[self.l1_int] * cl_XpYp_1[self.l2_int]
-                term2 = RtR_YXp * cl_XY_2[self.l1_int] * cl_XpYp_2[self.l2_int]
-
-                # terms without any response weight:
                 toQQ = self.X2S('Q', X, 1) * self.X2S('Q', Yp, 2)
                 toUU = self.X2S('U', X, 1) * self.X2S('U', Yp, 2)
                 toQU = self.X2S('Q', X, 1) * self.X2S('U', Yp, 2)
                 toUQ = self.X2S('U', X, 1) * self.X2S('Q', Yp, 2)
+
+
+
+                # terms without any response weight:
+                term1 = RtR_YXp * cl_XY_1[self.l1_int] * cl_XpYp_1[self.l2_int]
+                term2 = RtR_YXp * cl_XY_2[self.l1_int] * cl_XpYp_2[self.l2_int]
 
                 W1_zz[0] += toQQ * term1
                 W1_zz[1] += toUU * term1
@@ -353,11 +358,12 @@ class stokes:
                 W1_01[0] += toQQ * term1
                 W1_01[1] += toUU * term1
                 W1_01[2] += toQU * term1
-                W1_01[3] += toUQ * term1
+                #W1_01[3] += toUQ * term1
+
                 W2_01[0] += toQQ * term2
                 W2_01[1] += toUU * term2
                 W2_01[2] += toQU * term2
-                W2_01[3] += toUQ * term2
+                #W2_01[3] += toUQ * term2
 
                 term1 = RtR_YXp * cl_XY_1_0[self.l1_int] * cl_XpYp_1_0[self.l2_int] * self.l1s[1] * self.l2s[0]
                 term2 = RtR_YXp * cl_XY_2_0[self.l1_int] * cl_XpYp_2_0[self.l2_int] * self.l1s[1] * self.l2s[0]
@@ -365,11 +371,12 @@ class stokes:
                 W1_10[0] += toQQ * term1
                 W1_10[1] += toUU * term1
                 W1_10[2] += toUQ * term1 # (UQ <> UQ)
-                W1_10[3] += toQU * term1 # (UQ <> UQ)
+                #W1_10[3] += toQU * term1 # (UQ <> UQ)
+
                 W2_10[0] += toQQ * term2
                 W2_10[1] += toUU * term2
                 W2_10[2] += toUQ * term2 # (UQ <> UQ)
-                W2_10[3] += toQU * term2 # (UQ <> UQ)
+                #W2_10[3] += toQU * term2 # (UQ <> UQ)
 
                 # ==== terms with one derivatives
                 term1 = RtR_YXp * cl_XY_1_0[self.l1_int] * cl_XpYp_1[self.l2_int] * self.l1s[0]
@@ -378,6 +385,7 @@ class stokes:
                 W1_0z[1] += toUU * term1
                 W1_0z[2] += toQU * term1
                 W1_0z[3] += toUQ * term1
+
                 W2_0z[0] += toQQ * term2
                 W2_0z[1] += toUU * term2
                 W2_0z[2] += toQU * term2
@@ -385,10 +393,12 @@ class stokes:
                 # ==== We swap QU and UQ indices to make easier the combination to real and imaginary part later
                 term1 = RtR_YXp * cl_XY_1[self.l1_int] * cl_XpYp_1_0[self.l2_int] * self.l2s[0]
                 term2 = RtR_YXp * cl_XY_2[self.l1_int] * cl_XpYp_2_0[self.l2_int] * self.l2s[0]
+
                 W1_z0[0] += toQQ * term1
                 W1_z0[1] += toUU * term1
                 W1_z0[2] += toUQ * term1 # QU <-> UQ
                 W1_z0[3] += toQU * term1 # QU <-> UQ
+
                 W2_z0[0] += toQQ * term2
                 W2_z0[1] += toUU * term2
                 W2_z0[2] += toUQ * term2 # QU <-> UQ
@@ -403,7 +413,7 @@ class stokes:
         Ll2 = np.sum((self.l1s + self.l2s) * self.l2s, axis=0)
         for W in [W1_zz, W1_0z, W1_z0, W1_00, W1_10, W1_01]:
             W *= Ll1
-        for W in [W2_zz, W2_0z, W1_z0, W2_00, W2_10, W2_01]:
+        for W in [W2_zz, W2_0z, W2_z0, W2_00, W2_10, W2_01]:
             W *= Ll2
         #i_sign = 1j ** (ders_1 is not None) * 1j ** (ders_2 is not None)
         W_zz = (W1_zz + W2_zz).astype(complex)
@@ -411,15 +421,17 @@ class stokes:
         W_zz[3] *= -0.5j
 
         W_00 = (W1_00 + W2_00).astype(complex)
+        W_00[0] *= (-1)     # (1j) ** 2 factor
+        W_00[1] *= (-1)
         W_00[2] *= (-1 *  0.5 )
         W_00[3] *= (-1 * -0.5j)
 
-        W_0_re =  (   0.5 * 1j) * ( (W1_0z + W2_0z) +  (W1_z0 + W2_z0))  # 1j from deriv
-        W_0_im =  ( -0.5j * 1j) * ( (W1_0z + W2_0z) -  (W1_z0 + W2_z0))  # 1j from deriv
+        W_0_re =  (   0.5 * 1j) * ( (W1_0z + W2_0z) -  (W1_z0 + W2_z0))  # 1j from deriv
+        W_0_im =  (   0.5 * 1.) * ( (W1_0z + W2_0z) +  (W1_z0 + W2_z0))  # 1j from deriv
 
-        # W01 has re QQ, re UU, re QU
-        W_01 = (0.5 * 1j) * (W1_01 + W1_10) # real part of QQ and UU, and Re and Im of QU
-        W_01[3] =  (-0.5j * 1j) * (W1_01[3] - W1_10[3])
+        # W01 has re QQ, re UU, re QU im QU
+        W_01 =    (-1 * 0.5) * ( (W1_01 + W2_01) + (W1_10 + W2_10) ).astype(complex) # real part of QQ and UU, and Re and Im of QU
+        W_01[3] = (+1 * 0.5j ) * ((W1_01[2] + W2_01[2]) - (W1_10[2] + W2_10[2]) )
 
         return W_zz, W_00, W_0_re, W_0_im, W_01
 
@@ -491,47 +503,10 @@ class stokes:
             WU += ( self.W_ST('Q', 'U', ders_1=ders_1, ders_2=ders_2) + 1j * s1 / abs(s1) * self.W_ST('U', 'U', ders_1=ders_1, ders_2=ders_2) )
         return WQ +  1j * s2 / abs(s2) * WU
 
-    def get_n1_QQ(self, k, L, QorU='Q'):
-        """Ways to build the QQ and UU terms with rffts only.
 
-            It does checks out!
-
-        """
-        self._build_key(k, L, rfft=True)
-        ir2  = np.fft.irfft2
-        QQ = ir2(self.W_ST(QorU, QorU, Ponly=True))
-        QQ_00= ir2(self.W_ST(QorU, QorU, Ponly=True, ders_1=0, ders_2=0))
-        QQ_01 = 0.5 * ir2(self.W_ST(QorU, QorU, Ponly=True, ders_1=0, ders_2=1) + self.W_ST(QorU, QorU, Ponly=True, ders_1=1, ders_2=0))
-        n1_QQ = 0.
-        #QQ0, UU0, QU0, UQ0 = np.fft.ifft2(self.W_ST_Pol(ders_1=0))
-        #target = np.fft.ifft2(slib.W_ST('Q', 'Q', ders_1=0))
-        QQ0_re = ir2(0.5 * (self.W_ST(QorU, QorU, ders_1=0) - self.W_ST(QorU, QorU, ders_2=0)))
-        QQ0_im = ir2(-0.5j * (self.W_ST(QorU, QorU, ders_1=0) + self.W_ST(QorU, QorU, ders_2=0)))
-
-        n1_QQ += 2  * np.sum(self.xipp[0, 0] * (QQ_00 * QQ - (QQ0_re ** 2 - QQ0_im ** 2)))
-        n1_QQ += 2. * np.sum(self.xipp[0, 1] * (QQ_01 * QQ - (QQ0_re * QQ0_re.T - QQ0_im * QQ0_im.T)))
-        """ and here is the stuff for QU :
-        QU00 = np.fft.ifft2(slib.W_ST('Q', 'U', ders_1=0, ders_2=0))
-        UQ00 = np.fft.ifft2(slib.W_ST('U', 'Q', ders_1=0, ders_2=0))
-        
-        UQ0 =  np.fft.ifft2(slib.W_ST('U', 'Q', ders_1=0))
-        QU0 = -np.fft.ifft2(slib.W_ST('Q', 'U', ders_2=0))
-        
-        QU = np.fft.ifft2(slib.W_ST('Q', 'U'))
-        UQ = np.fft.ifft2(slib.W_ST('U', 'Q'))
-        print(np.max(np.abs(QU - UQ.conj())))
-        print(np.max(np.abs(QU - UQ.conj())))
-        print(np.max(np.abs(QU0 - UQ0.conj())))
-        3.694822225952521e-13
-        3.694822225952521e-13
-        4.081579843510303e-16
-        """
-        return -self.norm * n1_QQ
-
-    def get_n1(self, k, L, optimize=False):
+    def get_n1(self, k, L, optimize=2, _rfft=True):
         L = float(L)
 
-        self._build_key(k, L, rfft=False)
         # --- precalc of the rfft'ed maps:
 
         Xs = []
@@ -540,6 +515,7 @@ class stokes:
 
         #--- raw version which matches TT perfectly
         if not optimize:
+            self._build_key(k, L, rfft=False)
             n1 = 0.
             n1_term2 = 0.
             n1_QQ = 0.
@@ -554,9 +530,8 @@ class stokes:
                             term1 += np.fft.ifft2(self.W_ST(T, S, ders_1=a, ders_2=b)) *  np.fft.ifft2(self.W_ST(S, T))
                             term2 += np.fft.ifft2(self.W_ST(T, S, ders_1=a)) * np.fft.ifft2(self.W_ST(S, T, ders_1=b))
                     n1 += np.sum(self.xipp[a, b] * (term1 - term2))
-                    n1_term2 += np.sum(self.xipp[a, b] *  (- term2))
-
-        else:
+        elif optimize == 1:
+            self._build_key(k, L, rfft=False)
             i2 = np.fft.ifft2
             ir2  = lambda m: np.fft.irfft2(m[:, :self.box.rshape[1]])
             if k == 'p_p':
@@ -596,5 +571,30 @@ class stokes:
                 n1_QU += 2 * np.sum(self.xipp[0, 1] * ( 2 * (QU0 * UQ0.T).real))
 
                 n1 += n1_QQ + n1_UU + n1_QU
+
+        elif optimize == 2: # 19 rfft's instead of 5 for T...
+            self._build_key(k, L, rfft=_rfft)
+            ift = np.fft.irfft2 if _rfft else np.fft.ifft2
+
+            W_zz, W_00, W_0_re, W_0_im, W_01 = ift(np.array(self.W_ST_Polv2()))
+            QQ, UU, QU_re, QU_im = W_zz
+            QQ00, UU00, QU00_re, QU00_im = W_00
+            QQ01_re, UU01_re, QU01_re, QU01_im = W_01
+            QQ0_re, UU0_re, QU0_re, UQ0_re = W_0_re
+            QQ0_im, UU0_im, QU0_im, UQ0_im = W_0_im
+
+            n1_QQ  = 2  * np.sum(self.xipp[0, 0] * (QQ * QQ00 - (QQ0_re ** 2 - QQ0_im ** 2)))
+            n1_QQ += 2. * np.sum(self.xipp[0, 1] * (QQ * QQ01_re - (QQ0_re * QQ0_re.T - QQ0_im * QQ0_im.T )))
+
+            n1_UU  = 2  * np.sum(self.xipp[0, 0] * (UU * UU00 - (UU0_re ** 2 - UU0_im ** 2)))
+            n1_UU += 2. * np.sum(self.xipp[0, 1] * (UU * UU01_re - (UU0_re * UU0_re.T - UU0_im * UU0_im.T )))
+
+            n1_QU  =  4 * np.sum(self.xipp[0, 0] * (QU00_re * QU_re + QU00_im * QU_im))
+            n1_QU +=  4 * np.sum(self.xipp[0, 1] * (QU01_re * QU_re + QU01_im * QU_im))
+            n1_QU -=  4 * np.sum(self.xipp[0, 0] * (QU0_re * UQ0_re - QU0_im * UQ0_im))
+            n1_QU +=  4 * np.sum(self.xipp[0, 1] * (QU0_re * UQ0_re.T - QU0_im * UQ0_im.T))
+
+            n1 = n1_QQ + n1_UU + n1_QU
+
         self._destroy_key(k)
         return -self.norm * n1, -self.norm * n1_QQ, -self.norm * n1_UU, -self.norm * n1_QU
