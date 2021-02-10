@@ -617,15 +617,6 @@ class stokes:
         i_sign = 1j  ** (ders_1 is not None) * 1j ** (ders_2 is not None)
         return i_sign* (W1 + W2)#, W1, W2
 
-    def W_spin(self, s1, s2, ders_1=None, ders_2=None):
-        #FIXME: hack
-        WQ = 0j
-        WU = 0j
-        if s1 in [-2, 2]:
-            WQ += ( self.W_ST('Q', 'Q', ders_1=ders_1, ders_2=ders_2) + 1j * s1 / abs(s1) * self.W_ST('U', 'Q', ders_1=ders_1, ders_2=ders_2) )
-            WU += ( self.W_ST('Q', 'U', ders_1=ders_1, ders_2=ders_2) + 1j * s1 / abs(s1) * self.W_ST('U', 'U', ders_1=ders_1, ders_2=ders_2) )
-        return WQ +  1j * s2 / abs(s2) * WU
-
     def _get_n1_TS(self, T, S, _rfft=True, verbose=False):
         ift = np.fft.irfft2 if _rfft else np.fft.ifft2
         W_re, W_im, W00_re, W00_im, W_01_re, W_01_im, W_0z_re, W_0z_im, W_z0_re, W_z0_im = ift(np.array(self.W_TS_odiag(T, S, verbose=verbose)))
