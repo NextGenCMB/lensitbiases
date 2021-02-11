@@ -21,8 +21,8 @@ setup(
     data_files=[('n1/data/cls', ['n1/data/cls/FFP10_wdipole_lensedCls.dat',
                                          'n1/data/cls/FFP10_wdipole_lenspotentialCls.dat',
                                          'n1/data/cls/FFP10_wdipole_params.ini'])],
-    install_requires=['numpy'],
-    requires=['numpy'],
+    install_requires=['numpy', 'pyfftw'],
+    requires=['numpy', 'pyfftw'],
     long_description=long_description,
     configuration=configuration)
 

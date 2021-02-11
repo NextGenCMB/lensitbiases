@@ -1,6 +1,8 @@
+import os
 import numpy as np
-from n1.utils_n1 import extcl, cls_dot, prepare_cls
+from n1.utils_n1 import extcl, cls_dot
 from n1.box import box
+import pyfftw
 
 class n0_fft:
     def __init__(self, cls_ivfs, cls_w,  lminbox=50, lmaxbox=2500):
@@ -29,53 +31,33 @@ class n0_fft:
         norm *= (float(self.box.lminbox)) ** 4
         self.norm = norm
 
+    def _ifft2(self, rm):
+        outp = pyfftw.empty_aligned(self.box.shape, dtype='float64')
+        inpt = pyfftw.empty_aligned(self.box.rshape, dtype='complex128')
+        ifft2 = pyfftw.FFTW(inpt, outp, axes=(0, 1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
+        return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
+
     def _X2S(self, S, X, rfft=True):
         """Matrix element sending X cmb mode to stokes flat-sky mode S
 
 
         """
-        if S == 'T':
-            return 1. if X == 'T' else 0.
+        if S == 'T':  return 1. if X == 'T' else 0.
         if S == 'Q':
-            if X == 'T':
-                return 0.
+            if X == 'T': return 0.
             if self._cos2p_sin2p is None:
                 self._cos2p_sin2p = self.box.cos2p_sin2p(rfft=rfft)
             sgn = 1 if X == 'E' else -1
             return sgn * self._cos2p_sin2p[0 if X == 'E' else 1]
         if S == 'U':
-            if X == 'T':
-                return 0.
+            if X == 'T': return 0.
             if self._cos2p_sin2p is None:
                 self._cos2p_sin2p = self.box.cos2p_sin2p(rfft=rfft)
             return self._cos2p_sin2p[1 if X == 'E' else 0]
         assert 0
 
-    def _W_ST(self, S, T, ders_1=None, ders_2=None, rfft=False):
-        ls_int = self.box.ls(rfft=rfft)
-        ls= np.array(np.meshgrid(self.box.ny_1d, self.box.nx_1d if rfft else self.box.ny_1d, indexing='ij'))
 
-        if ders_1 is None and ders_2 is None:
-            w = self.K_ls
-            fac = 1.
-        elif ders_1 is not None and ders_2 is not None:
-            w = self.wKw_ls
-            fac = - ls[ders_1] * ls[ders_2]
-        else:
-            w = self.wK_ls if ders_1 is not None else self.Kw_ls
-            fac = 1j * (ls[ders_1] if ders_1 is not None else 1.)  * (ls[ders_2] if ders_2 is not None else 1.)
-
-        X2i = {'T': 0, 'E': 1, 'B': 2}
-        ret = 0j
-        for X in ['T'] if S == 'T' else ['E', 'B']:
-            i = X2i[X]
-            for Y in ['B'] if X == 'B' else ['T', 'E']: # this assumes EB = TB  = 0
-                j = X2i[Y]
-                ret += w[i, j][ls_int] * self._X2S(S, X) * self._X2S(T, Y)
-        return ret * fac
-
-
-    def get_n0_2d(self, k):
+    def get_n0_2d(self, k, _pyfftw=True):
         """Returns unormalized QE noise for each 2d multipole on the flat-sky box
 
             Note:
@@ -90,7 +72,7 @@ class n0_fft:
         ls = self.box.ls()
 
         Ss = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
-        ir2 = np.fft.irfft2
+        ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
         for XY in ['TT', 'EE', 'TE', 'ET', 'BB']:  # TT, TE, ET, EE, BB
             X,Y = XY
             i = X2i[X]
@@ -114,10 +96,10 @@ class n0_fft:
         Fyy, Fxx, Fxy = np.fft.rfft2(Fs).real
         return - self.norm * (ny ** 2 * Fyy + nx ** 2 * Fxx + 2 * nx * ny * Fxy)
 
-    def get_n0(self, k):
+    def get_n0(self, k, _pyfftw=True):
         """Returns unormalized QE noise for multipole along an axis of the box
 
-            This uses 1-dimensional rfft on a third of the terms
+            This uses 1-dimensional rfft on a subset of the terms
 
 
         """
@@ -127,9 +109,10 @@ class n0_fft:
         ls = self.box.ls()
 
         Ss = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
-        ir2 = np.fft.irfft2
-        for XY in ['TT', 'EE', 'TE', 'ET', 'BB']
-            X,Y = XY
+        XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
+        ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
+        for XY in XYs:
+            X, Y = XY
             i = X2i[X]
             j = X2i[Y]
             K      = self.K_ls[i, j][ls]
@@ -137,12 +120,14 @@ class n0_fft:
             Kw_1   =  1j * self.Kw_ls [i, j][ls] * nx
             wK_1   =  1j * self.Kw_ls [j, i][ls] * nx
             for i, S in enumerate(Ss):
-                for T in Ss[i:]:
-                    fac = self._X2S(S, X) * self._X2S(T, Y)
-                    if np.any(fac):
+                X2S = self._X2S(S, X)
+                for T in Ss[i:] * (np.any(X2S)):
+                    Y2T = self._X2S(T, Y)
+                    if np.any(Y2T):
+                        fac = X2S * Y2T
                         Fxx  +=  (1 + (S != T)) * ir2(K * fac)  * ir2(wKw_11 * fac) + ir2(Kw_1 * fac) * ir2(wK_1 * fac)
         # 1d fft method using only F11
-        return -self.norm * self.box.nx_1d ** 2 * np.sum(np.fft.rfft(Fxx).real, axis=0)
+        return -self.norm * self.box.nx_1d[:-1] ** 2 * np.sum(np.fft.rfft(Fxx).real, axis=0)[:-1], self.box.nx_1d[:-1] * self.box.lminbox
 
 
 

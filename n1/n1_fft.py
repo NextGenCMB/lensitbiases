@@ -8,15 +8,22 @@ r"""rFFT N1 and N1 matrix main module
 
 
     Note:
-        This assumes (but does not check for) :math:`C_\ell^{TB} = C_\ell^{EB} = 0` throughout
 
-        (If otherwise required this can adapted with little work)
+        This assumes (but never checks for) :math:`C_\ell^{TB} = C_\ell^{EB} = 0` throughout
+
+        (If otherwise required this can adapted with little extra work)
+
+    Note:
+
+        Default behavior is to use pyfftw rffts with OMP_NUM_THREADS threads, 1 if not set
 
 
 """
 import numpy as np
 from n1.utils_n1 import extcl, cls_dot, prepare_cls
 from n1.box import box
+import os
+import pyfftw
 
 def get_n1(k, Ls, jt_TP, do_n1mat=True, lminbox=50, lmaxbox=2500):
     """Example to show how to get N1 for a set of key and cls, using the Planck defaults FFP10 spectra and config
@@ -70,7 +77,6 @@ def get_n1(k, Ls, jt_TP, do_n1mat=True, lminbox=50, lmaxbox=2500):
             n1[i] = tn1
         ls, = np.where(n1lib.box.mode_counts() > 0)
         return n1, n1mat, ls
-
 
 
 
@@ -131,6 +137,20 @@ class n1_fft:
         # :always 2 powers in xi_ab, 4 powers of ik_x or ik_y in XY and IJ weights, and two add. powers matching xi_ab's from the responses
         self.norm = norm
 
+    def _irfft2(self, rm):
+        outp = pyfftw.empty_aligned(self.box.shape, dtype='float64')
+        inpt = pyfftw.empty_aligned(self.box.rshape, dtype='complex128')
+        ifft2 = pyfftw.FFTW(inpt, outp, axes=(0, 1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
+        if rm.ndim > 2:
+            assert rm.ndim == 3
+            out = np.empty((len(rm), self.box.shape[0], self.box.shape[1]), dtype=float)
+            for i, r in enumerate(rm):
+                inpt[:] = r
+                ifft2()
+                out[i] = outp
+            return out
+        else:
+            return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
 
     @staticmethod
     def _get_cos2p_sin2p(ls):
@@ -642,27 +662,26 @@ class n1_fft:
         i_sign = 1j  ** (ders_1 is not None) * 1j ** (ders_2 is not None)
         return i_sign* (W1 + W2)#, W1, W2
 
-    def _get_n1_TS(self, T, S, _rfft=True, verbose=False):
+    def _get_n1_TS(self, T, S, verbose=False):
         """Factors of xi_00 and xi_11 in N1 for T != S """
         assert T != S
-        ift = np.fft.irfft2 if _rfft else np.fft.ifft2
-        W_re, W_im, W00_re, W00_im, W_01_re, W_01_im, W_0z_re, W_0z_im, W_z0_re, W_z0_im = ift(np.array(self._W_TS_odiag(T, S, verbose=verbose)))
+        W_re, W_im, W00_re, W00_im, W_01_re, W_01_im, W_0z_re, W_0z_im, W_z0_re, W_z0_im = self._irfft2(np.array(self._W_TS_odiag(T, S, verbose=verbose)))
         # UQ_{0,z} = - QU_{z, 0}^dagger
         sgn_Q = 1 if 'Q' in [T, S] else -1  # symmetry taking W_(1,) to W_(0,) takes a (-1)^{ (S = Q) + (T = Q)}
         term_00 = 4. * ( (W00_re  * W_re         + W00_im * W_im) + (W_0z_re * W_z0_re      + W_0z_im * W_z0_im))
         term_01 = 4. * ( (W_01_re * W_re         + W_01_im * W_im) + sgn_Q * (W_0z_re * (-W_z0_re.T) - W_0z_im * W_z0_im.T))
         return np.array([term_00, term_01])
 
-    def _get_n1_SS(self, S, _rfft=True):
+    def _get_n1_SS(self, S):
         """Factors of xi_00 and xi_11 in N1 for T == S """
-        ift = np.fft.irfft2 if _rfft else np.fft.ifft2
-        SS, SS_00, SS_01_re, SS_0z_re, SS_0z_im = ift(np.array(self._W_SS_diag(S)))
+        SS, SS_00, SS_01_re, SS_0z_re, SS_0z_im = self._irfft2(np.array(self._W_SS_diag(S)))
         term_00 =  2 * (SS * SS_00    - (SS_0z_re ** 2         - SS_0z_im ** 2))
         term_01 =  2 * (SS * SS_01_re - (SS_0z_re * SS_0z_re.T - SS_0z_im * SS_0z_im.T))
         return np.array([term_00, term_01])
 
-    def get_n1(self, k, L, do_n1mat=True, _optimize=2):
+    def get_n1(self, k, L, do_n1mat=True, _optimize=2, _pyfftw=True):
         L = float(L)
+        if not _pyfftw: self._irfft2 = np.fft.irfft2
         _rfft = True
         n1_mat = None
         #if _optimize == 2:
