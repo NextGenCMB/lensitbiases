@@ -47,8 +47,8 @@ class box:
     def rsqd2l(self, r2):
         return np.int_(np.round((2. * np.pi / self.lsides[0]) * (np.sqrt(r2))))
 
-    def ls(self):
-        n2y, n2x = np.meshgrid(self.ny_1d ** 2, self.nx_1d ** 2, indexing='ij')
+    def ls(self, rfft=True):
+        n2y, n2x = np.meshgrid(self.ny_1d ** 2, (self.nx_1d if rfft else self.ny_1d) ** 2, indexing='ij')
         return self.rsqd2l(n2y + n2x)
 
     def cos2p_sin2p(self, rfft=True):

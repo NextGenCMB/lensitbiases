@@ -8,7 +8,7 @@ def prepare_cls(k, jt_TP=False):
     cls_grad = camb_clfile(os.path.join(path, 'FFP10_wdipole_gradlensedCls.dat'))
     cls_unl = camb_clfile(os.path.join(path, 'FFP10_wdipole_lenspotentialCls.dat'))
     cls_weights = camb_clfile(os.path.join(path, 'FFP10_wdipole_gradlensedCls.dat'))
-    fals = get_fal(jt_tp=jt_TP)[1]
+    ivfs_cls, fals = get_fal(jt_tp=jt_TP)[:2]
     if k == 'ptt':
         fals['ee'] *= 0.
         fals['bb'] *= 0.
@@ -16,7 +16,7 @@ def prepare_cls(k, jt_TP=False):
         fals['tt'] *= 0.
     if k in ['ptt', 'p_p']:
         cls_weights['te'] *= 0.
-    return fals, cls_weights, cls_grad, cls_unl['pp']
+    return ivfs_cls, fals, cls_weights, cls_grad, cls_unl['pp']
 
 
 def cli(cl):

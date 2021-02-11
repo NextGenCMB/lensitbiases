@@ -55,7 +55,7 @@ def get_n1(k, Ls, jt_TP, do_n1mat=True, lminbox=50, lmaxbox=2500):
     """
     assert k in ['p', 'p_p', 'ptt'], k
     # --- loads example filter, QE weights, response CMB spectra and anisotropy source spectrum
-    fals, cls_weights, cls_grad, cpp = prepare_cls(k, jt_TP=jt_TP)
+    ivfs_cls, fals, cls_weights, cls_grad, cpp = prepare_cls(k, jt_TP=jt_TP)
     # --- instantiation
     n1lib = n1_fft(fals, cls_weights, cls_grad, cpp, lminbox=lminbox, lmaxbox=lmaxbox)
     # --- computing the biases
@@ -109,13 +109,13 @@ class n1_fft:
 
         self.F_ls = cls_dot([fals])
         self.wF_ls = cls_dot([cls_w, fals])
-        self.Fw_ls = cls_dot([fals, cls_w])
+        self.Fw_ls = cls_dot([fals, cls_w]) # idem, but transpose
 
         self.fF_ls = cls_dot([cls_f, fals])
-        self.Ff_ls = cls_dot([fals,  cls_f])
+        self.Ff_ls = cls_dot([fals,  cls_f]) # idem, but transpose
 
         self.fFw_ls = cls_dot([cls_f, fals, cls_w])
-        self.wFf_ls = cls_dot([cls_w, fals, cls_f])
+        self.wFf_ls = cls_dot([cls_w, fals, cls_f])# idem, but transpose
 
 
         # === precalc of deflection corr fct:
