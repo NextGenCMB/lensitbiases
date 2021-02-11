@@ -664,9 +664,9 @@ class n1_fft:
     def get_n1(self, k, L, do_n1mat=True, _optimize=2):
         L = float(L)
         _rfft = True
-        n1_mat = 0
-        if _optimize == 2:
-             _optimize = 1 if k == 'p_p' else 2
+        n1_mat = None
+        #if _optimize == 2:
+        #     _optimize = 1 if k == 'p_p' else 2
         if _optimize==0:  #--- raw, slower version serving as test case
             Xs = ['T', 'Q', 'U']
             self._build_key(k, L, rfft=False)
@@ -684,7 +684,7 @@ class n1_fft:
 
         elif _optimize == 1:
             assert k == 'p_p'
-            # This assumes sep_TP
+            # is a bit faster but assumes sep_TP
             # 20 rfft's instead of 5 for T.
             # For small boxes though the building of the weights can be more than the FFT's
             self._build_key(k, L, rfft=_rfft)
