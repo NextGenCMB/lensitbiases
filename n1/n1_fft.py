@@ -165,7 +165,7 @@ class n1_fft:
             self._cos2p_sin2p = (cos2p, sin2p)
         return self._cos2p_sin2p
 
-    def X2S(self, S, X, vec1or2):
+    def _X2S(self, S, X, vec1or2):
         """Matrix element sending X cmb mode to stokes flat-sky mode S
 
 
@@ -187,7 +187,7 @@ class n1_fft:
             return self._cos2p_sin2p_v1[vec1or2][1 if X == 'E' else 0]
         assert 0
 
-    def X2Y(self, Y, X):
+    def _X2Y(self, Y, X):
         """Matrix element
 
                 (R^tR)^{YX}_{l1,l2} = \sum_{S in T,Q,U} R^{S Y}_{l1} R^{S X}_{l2}
@@ -221,7 +221,7 @@ class n1_fft:
         W2_SS_01 = np.zeros(s, dtype=float)
 
         for X in ['T'] if S == 'T' else ['E', 'B']:
-            # RSX_1 = self.X2S(S, X, 1)
+            # RSX_1 = self._X2S(S, X, 1)
             # for Y in ['E', 'B']: # Assuming no EB and BE, Y must be X
             # S XY XY' S   ->
             for Y in ['B'] if X == 'B' else ['T', 'E']:  # could restrict this is sep-TP configuration
@@ -230,7 +230,7 @@ class n1_fft:
                 cl_XY_1_0 = self.fFw_ls[X2i[X], X2i[Y]]
                 cl_XY_2_0 = self.fF_ls[X2i[X], X2i[Y]]
                 for Xp in ['T'] if Y == 'T' else ['E', 'B']:
-                    RtR_YXp = self.X2Y(Y, Xp)
+                    RtR_YXp = self._X2Y(Y, Xp)
                     # for Yp in ['E', 'B']: # Assuming no EB and BE, Yp must be Xp
                     for Yp in ['B'] * (S != 'T') if Xp == 'B' else (['T'] if S == 'T' else ['E']):
                         cl_XpYp_1 = self.F_ls[X2i[Xp], X2i[Yp]]
@@ -238,7 +238,7 @@ class n1_fft:
                         cl_XpYp_1_0 = self.Ff_ls[X2i[Xp], X2i[Yp]]
                         cl_XpYp_2_0 = self.wFf_ls[X2i[Xp], X2i[Yp]]
 
-                        toSS_RtR = self.X2S(S, X, 1) * self.X2S(S, Yp, 2) * RtR_YXp
+                        toSS_RtR = self._X2S(S, X, 1) * self._X2S(S, Yp, 2) * RtR_YXp
                         # terms without any response weight:
                         W1_SS += toSS_RtR * cl_XY_1[self.l1_int] * cl_XpYp_1[self.l2_int]
                         W2_SS += toSS_RtR * cl_XY_2[self.l1_int] * cl_XpYp_2[self.l2_int]
@@ -301,7 +301,7 @@ class n1_fft:
         X2i = {'T': 0, 'E': 1, 'B': 2}
 
         for X in ['T', 'E', 'B']:
-            # RSX_1 = self.X2S(S, X, 1)
+            # RSX_1 = self._X2S(S, X, 1)
             # for Y in ['E', 'B']: # Assuming no EB and BE, Y must be X
             for Y in ['B'] if X == 'B' else ['T', 'E']: # could restrict this is sep-TP configuration
                 cl_XY_1 = self.Fw_ls[X2i[X], X2i[Y]]
@@ -309,7 +309,7 @@ class n1_fft:
                 cl_XY_1_0 = self.fFw_ls[X2i[X], X2i[Y]]
                 cl_XY_2_0 = self.fF_ls[X2i[X], X2i[Y]]
                 for Xp in ['T'] if Y == 'T' else ['E', 'B']:
-                    RtR_YXp = self.X2Y(Y, Xp)
+                    RtR_YXp = self._X2Y(Y, Xp)
                     # for Yp in ['E', 'B']: # Assuming no EB and BE, Yp must be Xp
                     for Yp in ['B'] if Xp == 'B' else ['T', 'E']:
                         cl_XpYp_1 = self.F_ls[X2i[Xp], X2i[Yp]]
@@ -317,8 +317,8 @@ class n1_fft:
                         cl_XpYp_1_0 = self.Ff_ls[X2i[Xp], X2i[Yp]]
                         cl_XpYp_2_0 = self.wFf_ls[X2i[Xp], X2i[Yp]]
 
-                        toTS = self.X2S(T, X, 1) *  self.X2S(S, Yp, 2)
-                        toST = self.X2S(S, X, 1) *  self.X2S(T, Yp, 2)
+                        toTS = self._X2S(T, X, 1) * self._X2S(S, Yp, 2)
+                        toST = self._X2S(S, X, 1) * self._X2S(T, Yp, 2)
                         TSpST = toTS + toST
                         TSmST = toTS - toST
                         # terms without any response weight:
@@ -382,8 +382,8 @@ class n1_fft:
 
         return W_re, W_im, W00_re, W00_im, W_01_re, W_01_im, W_0z_re, W_0z_im, W_z0_re, W_z0_im
 
-    def W_ST_Pol(self, verbose=False):
-        """Same as W_ST but returns all Stokes weights in one go
+    def _W_ST_Pol(self, verbose=False):
+        """Same as _W_ST but returns all Stokes weights in one go
 
             Returns: QQ, UU , QU and UQ
 
@@ -410,7 +410,7 @@ class n1_fft:
 
         X2i = {'T': 0, 'E': 1, 'B': 2}
         for X in ['E', 'B']:
-            #RSX_1 = self.X2S(S, X, 1)
+            #RSX_1 = self._X2S(S, X, 1)
             #for Y in ['E', 'B']: # Assuming no EB and BE, Y must be X
             Y = X
             cl_XY_1 = self.Fw_ls[X2i[X], X2i[Y]]
@@ -418,7 +418,7 @@ class n1_fft:
             cl_XY_1_0 = self.fFw_ls[X2i[X], X2i[Y]]
             cl_XY_2_0 = self.fF_ls[X2i[X], X2i[Y]]
             for Xp in ['E', 'B']:
-                RtR_YXp = self.X2Y(Y, Xp)
+                RtR_YXp = self._X2Y(Y, Xp)
                 #for Yp in ['E', 'B']: # Assuming no EB and BE, Yp must be Xp
                 Yp = Xp
                 cl_XpYp_1 = self.F_ls[X2i[Xp], X2i[Yp]]
@@ -426,10 +426,10 @@ class n1_fft:
                 cl_XpYp_1_0 = self.Ff_ls[X2i[Xp], X2i[Yp]]
                 cl_XpYp_2_0 = self.wFf_ls[X2i[Xp], X2i[Yp]]
 
-                toQQ = self.X2S('Q', X, 1) * self.X2S('Q', Yp, 2)
-                toUU = self.X2S('U', X, 1) * self.X2S('U', Yp, 2)
-                toQU = self.X2S('Q', X, 1) * self.X2S('U', Yp, 2)
-                toUQ = self.X2S('U', X, 1) * self.X2S('Q', Yp, 2)
+                toQQ = self._X2S('Q', X, 1) * self._X2S('Q', Yp, 2)
+                toUU = self._X2S('U', X, 1) * self._X2S('U', Yp, 2)
+                toQU = self._X2S('Q', X, 1) * self._X2S('U', Yp, 2)
+                toUQ = self._X2S('U', X, 1) * self._X2S('Q', Yp, 2)
 
 
 
@@ -546,7 +546,7 @@ class n1_fft:
         return W_zz, W_00, W_0_re, W_0_im, W_01
 
 
-    def W_ST(self, S, T,  ders_1=None, ders_2=None, verbose=False):
+    def _W_ST(self, S, T, ders_1=None, ders_2=None, verbose=False):
         """Stokes QE weight function for a pair of Stokes parameter
 
             Args:
@@ -571,7 +571,7 @@ class n1_fft:
         Xs = ['T', 'E', 'B']
         X2i = {'T' : 0, 'E' : 1, 'B' : 2}
         for X in ['T'] if S == 'T' else ['E', 'B']:
-            RSX_1 = self.X2S(S, X, 1)
+            RSX_1 = self._X2S(S, X, 1)
             for Y in Xs:
                 if ders_1 is not None:
                     cl_XY_1 = self.fFw_ls[X2i[X], X2i[Y]][self.l1_int] * (self.l1s[ders_1]) # wFf transpose..
@@ -580,7 +580,7 @@ class n1_fft:
                     cl_XY_1 = self.Fw_ls[X2i[X], X2i[Y]][self.l1_int]
                     cl_XY_2 = self.F_ls[ X2i[X], X2i[Y]][self.l1_int]
                 for Xp in (['T'] if Y == 'T' else ['E', 'B']):
-                    RtR_YXp = self.X2Y(Y, Xp)
+                    RtR_YXp = self._X2Y(Y, Xp)
                     for Yp in ['T'] if T == 'T' else ['E', 'B']:
                         if ders_2 is not None:
                             cl_XpYp_1 = self.Ff_ls[ X2i[Xp], X2i[Yp]][self.l2_int] * self.l2s[ders_2]
@@ -590,7 +590,7 @@ class n1_fft:
                             cl_XpYp_1 =  self.F_ls[ X2i[Xp], X2i[Yp]][self.l2_int]
                             cl_XpYp_2 =  self.wF_ls[X2i[Xp], X2i[Yp]][self.l2_int]
 
-                        RTYp_2 = self.X2S(T, Yp, 2)
+                        RTYp_2 = self._X2S(T, Yp, 2)
                         term1 = (RSX_1 * RTYp_2 * RtR_YXp) * cl_XY_1 * cl_XpYp_1
                         term2 = (RSX_1 * RTYp_2 * RtR_YXp) * cl_XY_2 * cl_XpYp_2
 
@@ -642,8 +642,8 @@ class n1_fft:
                     term2 = 0j
                     for T in Xs:
                         for S in Xs:
-                            term1 += np.fft.ifft2(self.W_ST(T, S, ders_1=a, ders_2=b)) *  np.fft.ifft2(self.W_ST(S, T))
-                            term2 += np.fft.ifft2(self.W_ST(T, S, ders_1=a)) * np.fft.ifft2(self.W_ST(S, T, ders_1=b))
+                            term1 += np.fft.ifft2(self._W_ST(T, S, ders_1=a, ders_2=b)) * np.fft.ifft2(self._W_ST(S, T))
+                            term2 += np.fft.ifft2(self._W_ST(T, S, ders_1=a)) * np.fft.ifft2(self._W_ST(S, T, ders_1=b))
                     xipp = self.xipp[a + b] if (a + b) != 2 else self.xipp[0].T
                     n1 += np.sum(xipp * (term1 - term2).real)
 
@@ -655,7 +655,7 @@ class n1_fft:
             self._build_key(k, L, rfft=_rfft)
             ift = np.fft.irfft2 if _rfft else np.fft.ifft2
 
-            W_zz, W_00, W_0_re, W_0_im, W_01 = ift(np.array(self.W_ST_Pol()))
+            W_zz, W_00, W_0_re, W_0_im, W_01 = ift(np.array(self._W_ST_Pol()))
             QQ, UU, QU_re, QU_im = W_zz
             QQ00, UU00, QU00_re, QU00_im = W_00
             QQ01_re, UU01_re, QU01_re, QU01_im = W_01
