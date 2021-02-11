@@ -4,11 +4,10 @@ import n1
 
 
 def prepare_cls(k, jt_TP=False):
-    from plancklens import utils
     path =  os.path.join(os.path.abspath(os.path.dirname(n1.__file__)),'data', 'cls')
-    cls_grad = utils.camb_clfile(os.path.join(path, 'FFP10_wdipole_gradlensedCls.dat'))
-    cls_unl = utils.camb_clfile(os.path.join(path, 'FFP10_wdipole_lenspotentialCls.dat'))
-    cls_weights = utils.camb_clfile(os.path.join(path, 'FFP10_wdipole_gradlensedCls.dat'))
+    cls_grad = camb_clfile(os.path.join(path, 'FFP10_wdipole_gradlensedCls.dat'))
+    cls_unl = camb_clfile(os.path.join(path, 'FFP10_wdipole_lenspotentialCls.dat'))
+    cls_weights = camb_clfile(os.path.join(path, 'FFP10_wdipole_gradlensedCls.dat'))
     fals = get_fal(jt_tp=jt_TP)[1]
     if k == 'ptt':
         fals['ee'] *= 0.
@@ -73,7 +72,6 @@ def get_fal(jt_tp=False):
 
     """
     from plancklens.patchy import patchy
-    from plancklens import utils
     import healpy as hp
     lmax_ivf = 2048
     lmin_ivf = 100
@@ -81,8 +79,109 @@ def get_fal(jt_tp=False):
     nlevp = 55.
     beam = 6.5
     path = os.path.abspath(os.path.dirname(n1.__file__))
-    cls_len = utils.camb_clfile(os.path.join(path, 'data','cls', 'FFP10_wdipole_lensedCls.dat'))
+    cls_len = camb_clfile(os.path.join(path, 'data','cls', 'FFP10_wdipole_lensedCls.dat'))
     transf = hp.gauss_beam(beam / 60 / 180 * np.pi, lmax=lmax_ivf)
     ivcl, fal = patchy.get_ivf_cls(cls_len, cls_len, lmin_ivf, lmax_ivf, nlevt, nlevp, nlevt, nlevp, transf,
                                    jt_tp=jt_tp)
     return ivcl, fal, lmax_ivf
+
+
+def _get_fal(a, cl_len, nlev, transf, lmin, lmax):
+    """Simple diagonal isotropic filter
+
+    """
+    fal = cli(cl_len.get(a + a)[:lmax + 1] + (nlev / 60. / 180. * np.pi) ** 2 / transf[:lmax + 1] ** 2)
+    fal[:lmin] *= 0.
+    return fal
+
+
+def get_ivf_cls(cls_cmb_dat, cls_cmb_filt, lmin, lmax, nlevt_f, nlevp_f, nlevt_m, nlevp_m, transf, jt_tp=False):
+    """inverse filtered spectra (spectra of Cov^-1 X) for CMB inverse-variance filtering
+
+
+        Args:
+            cls_cmb_dat: dict of cmb cls of the data maps
+            cls_cmb_filt: dict of cmb cls used in the filtering matrix
+            lmin: minimum multipole considered
+            lmax: maximum multipole considered
+            nlevt_f: fiducial temperature noise level used in the filtering in uK-amin
+            nlevp_f: fiducial polarization noise level used in the filtering in uK-amin
+            nlevt_m: temperature noise level of the data in uK-amin
+            nlevp_m: polarization noise level of the data in uK-amin
+            transf: CMB transfer function
+            jt_tp: if set joint temperature-polarization filtering is performed. If not they are filtered independently
+
+        Returns:
+            dict of inverse-variance filtered maps spectra (for N0 calcs.)
+            dict of filtering matrix spectra (for response calcs. This has no dependence on the data parts of the inputs)
+
+
+    """
+    ivf_cls = {}
+    if not jt_tp:
+        filt_cls_i = {}
+        for a in ['t']:
+            ivf_cls[a + a] = _get_fal(a, cls_cmb_filt, nlevt_f, transf, lmin, lmax) ** 2 * cli(_get_fal(a, cls_cmb_dat, nlevt_m, transf, 0, lmax))
+            filt_cls_i[a + a] = _get_fal(a, cls_cmb_filt, nlevt_f, transf, lmin, lmax)
+        for a in ['e', 'b']:
+            ivf_cls[a + a] = _get_fal(a, cls_cmb_filt, nlevp_f, transf, lmin, lmax) ** 2 * cli(_get_fal(a, cls_cmb_dat, nlevp_m, transf, 0, lmax))
+            filt_cls_i[a + a] = _get_fal(a, cls_cmb_filt, nlevp_f, transf, lmin, lmax)
+        ivf_cls['te'] = cls_cmb_dat['te'][:lmax + 1] * _get_fal('e', cls_cmb_filt, nlevp_f, transf, lmin, lmax) * _get_fal('t', cls_cmb_filt,  nlevt_f, transf,   lmin, lmax)
+        return ivf_cls, filt_cls_i
+    else:
+        filt_cls = np.zeros((3, 3, lmax + 1), dtype=float)
+        dat_cls = np.zeros((3, 3, lmax + 1), dtype=float)
+        filt_cls[0, 0] = cli(_get_fal('t', cls_cmb_filt, nlevt_f, transf, lmin, lmax))
+        filt_cls[1, 1] = cli(_get_fal('e', cls_cmb_filt, nlevp_f, transf, lmin, lmax))
+        filt_cls[2, 2] = cli(_get_fal('b', cls_cmb_filt, nlevp_f, transf, lmin, lmax))
+        filt_cls[0, 1, lmin:] = cls_cmb_filt['te'][lmin:lmax + 1]
+        filt_cls[1, 0, lmin:] = cls_cmb_filt['te'][lmin:lmax + 1]
+        dat_cls[0, 0] = cli(_get_fal('t', cls_cmb_dat, nlevt_m, transf, lmin, lmax))
+        dat_cls[1, 1] = cli(_get_fal('e', cls_cmb_dat, nlevp_m, transf, lmin, lmax))
+        dat_cls[2, 2] = cli(_get_fal('b', cls_cmb_dat, nlevp_m, transf, lmin, lmax))
+        dat_cls[0, 1, lmin:] = cls_cmb_dat['te'][lmin:lmax + 1]
+        dat_cls[1, 0, lmin:] = cls_cmb_dat['te'][lmin:lmax + 1]
+        filt_cls_i = np.linalg.pinv(filt_cls.swapaxes(0, 2)).swapaxes(0, 2)
+        return _cls_dot(filt_cls_i, dat_cls, lmin, lmax), \
+               {'tt':filt_cls_i[0,0], 'ee':filt_cls_i[1, 1], 'bb':filt_cls_i[2, 2], 'te':filt_cls_i[0, 1]}
+
+def _cls_dot(cls_fidi, cls_dat, lmin, lmax):
+    zro = np.zeros(lmax + 1, dtype=float)
+    ret = {'tt':zro.copy(), 'te':zro.copy(), 'ee':zro.copy(), 'bb':zro.copy()}
+    for i in range(3):
+        for j in range(3):
+            ret['tt'] += cls_fidi[0, i] * cls_fidi[0, j] * cls_dat[i, j]
+            ret['te'] += cls_fidi[0, i] * cls_fidi[1, j] * cls_dat[i, j]
+            ret['ee'] += cls_fidi[1, i] * cls_fidi[1, j] * cls_dat[i, j]
+            ret['bb'] += cls_fidi[2, i] * cls_fidi[2, j] * cls_dat[i, j]
+    for cl in ret.values():
+        cl[:lmin] *= 0
+    return ret
+
+
+def camb_clfile(fname, lmax=None):
+    """CAMB spectra (lenspotentialCls, lensedCls or tensCls types) returned as a dict of numpy arrays.
+
+    Args:
+        fname (str): path to CAMB output file
+        lmax (int, optional): outputs cls truncated at this multipole.
+
+    """
+    cols = np.loadtxt(fname).transpose()
+    ell = np.int_(cols[0])
+    if lmax is None: lmax = ell[-1]
+    assert ell[-1] >= lmax, (ell[-1], lmax)
+    cls = {k : np.zeros(lmax + 1, dtype=float) for k in ['tt', 'ee', 'bb', 'te']}
+    w = ell * (ell + 1) / (2. * np.pi)  # weights in output file
+    idc = np.where(ell <= lmax) if lmax is not None else np.arange(len(ell), dtype=int)
+    for i, k in enumerate(['tt', 'ee', 'bb', 'te']):
+        cls[k][ell[idc]] = cols[i + 1][idc] / w[idc]
+    if len(cols) > 5:
+        wpp = lambda ell : ell ** 2 * (ell + 1) ** 2 / (2. * np.pi)
+        wptpe = lambda ell : np.sqrt(ell.astype(float) ** 3 * (ell + 1.) ** 3) / (2. * np.pi)
+        for i, k in enumerate(['pp', 'pt', 'pe']):
+            cls[k] = np.zeros(lmax + 1, dtype=float)
+        cls['pp'][ell[idc]] = cols[5][idc] / wpp(ell[idc])
+        cls['pt'][ell[idc]] = cols[6][idc] / wptpe(ell[idc])
+        cls['pe'][ell[idc]] = cols[7][idc] / wptpe(ell[idc])
+    return cls
