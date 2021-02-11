@@ -20,9 +20,9 @@ class n0_fft:
         cls_w = {k: extcl(self.box.lmaxbox + lminbox, cls_w[k]) for k in cls_w.keys()}  # estimator weights spectra
 
         self.K_ls = cls_dot([cls_ivfs])
-        self.Kw_ls = cls_dot([self.K_ls, cls_w])
-        self.wK_ls = cls_dot([cls_w, self.K_ls])
-        self.wKw_ls = cls_dot([cls_w, self.Kw_ls])
+        self.Kw_ls = cls_dot([cls_ivfs, cls_w])
+        self.wK_ls = cls_dot([cls_w, cls_ivfs])
+        self.wKw_ls = cls_dot([cls_w, cls_ivfs, cls_w])
 
         self._cos2p_sin2p = None
 
@@ -71,9 +71,11 @@ class n0_fft:
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
 
-        Ss = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
-        for XY in ['TT', 'EE', 'TE', 'ET', 'BB']:  # TT, TE, ET, EE, BB
+        Ss = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+        XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
+
+        for XY in XYs:  # TT, TE, ET, EE, BB
             X,Y = XY
             i = X2i[X]
             j = X2i[Y]
@@ -115,7 +117,7 @@ class n0_fft:
             X, Y = XY
             i = X2i[X]
             j = X2i[Y]
-            K      = self.K_ls[i, j][ls]
+            K      =       self.K_ls[i, j][ls]
             wKw_11 =  -1 * self.wKw_ls[i, j][ls] * nx ** 2
             Kw_1   =  1j * self.Kw_ls [i, j][ls] * nx
             wK_1   =  1j * self.Kw_ls [j, i][ls] * nx
