@@ -1,7 +1,13 @@
+"""This module a fft-based N1 calculator for TT-only estimators
+
+    Redundant with the main module but possibly a bit faster
+
+
+"""
 import numpy as np
 
-from n1 import  n1_utils
-from n1.n1_utils import extcl
+from n1.box import box
+from n1.utils_n1 import extcl
 
 
 class n1_ptt:
@@ -25,7 +31,7 @@ class n1_ptt:
         if npix % 2 == 1: npix += 1
 
         #===== instance with 2D flat-sky box info
-        self.box = n1_utils.box(lside, npix)
+        self.box = box(lside, npix)
 
         # === precalc of deflection corr fct:
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')

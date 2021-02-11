@@ -22,8 +22,11 @@ setup(
     url='https://github.com/carronj/n1',
     author='Julien Carron',
     author_email='to.jcarron@gmail.com',
-    description='Planck lensing python pipeline',
-    install_requires=['numpy'], #removed mpi4py for travis tests
+    description='FFT-based lensing and other anisotropies N1 bias calculator',
+    data_files=[('n1/data/cls', ['n1/data/cls/FFP10_wdipole_lensedCls.dat',
+                                         'n1/data/cls/FFP10_wdipole_lenspotentialCls.dat',
+                                         'n1/data/cls/FFP10_wdipole_params.ini'])],
+    install_requires=['numpy'],
     requires=['numpy'],
     long_description=long_description,
     configuration=configuration)

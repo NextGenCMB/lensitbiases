@@ -1,62 +1,10 @@
+r"""Module handling the flat-sky mode structure
+
+
+"""
 import numpy as np
-
-def cli(cl):
-    ret = np.zeros_like(cl, dtype=float)
-    ret[np.where(cl != 0)] = 1./ cl[np.where(cl != 0)]
-    return ret
-
-def extcl(lmax, cl):
-    if len(cl) - 1 < lmax:
-        dl = np.zeros(lmax + 1)
-        dl[:len(cl)] = cl
-    else:
-        dl = cl[:lmax+1]
-    return dl
-
-def freqs(i, N):
-    """Outputs the absolute integers frequencies [0,1,...,N/2,N/2-1,...,1]
-         in numpy fft convention as integer i runs from 0 to N-1.
-         Inputs can be numpy arrays e.g. i (i1,i2,i3) with N (N1,N2,N3)
-                                      or i (i1,i2,...) with N
-         Both inputs must be integers.
-         All entries of N must be even.
-    """
-    assert (np.all(N % 2 == 0)), "This routine only for even numbers of points"
-    return i - 2 * (i >= (N // 2)) * (i % (N // 2))
-
-def rfft2_reals(shape):
-    """Pure reals modes in 2d rfft according to patch specifics
-
-    """
-    N0, N1 = shape
-    fx = [0]
-    fy = [0]
-    if N1 % 2 == 0:
-        fx.append(0)
-        fy.append(N1 // 2)
-    if N0 % 2 == 0:
-        fx.append(N0 // 2)
-        fy.append(0)
-    if N1 % 2 == 0 and N0 % 2 == 0:
-        fx.append(N0 // 2)
-        fy.append(N1 // 2)
-    return np.array(fx), np.array(fy)
-
-def get_fal(jt_tp=False):
-    from plancklens.patchy import patchy
-    from plancklens import utils
-    import healpy as hp
-    import os
-    lmax_ivf = 2048
-    lmin_ivf = 100
-    nlevt = 35.
-    nlevp = 55.
-    beam = 6.5
-    cls_len = utils.camb_clfile(os.path.join('../../plancklens/plancklens/data/cls/', 'FFP10_wdipole_lensedCls.dat'))
-    transf = hp.gauss_beam(beam / 60 / 180 * np.pi, lmax=lmax_ivf)
-    ivcl, fal = patchy.get_ivf_cls(cls_len, cls_len, lmin_ivf, lmax_ivf, nlevt, nlevp, nlevt, nlevp, transf,
-                                   jt_tp=jt_tp)
-    return ivcl, fal, lmax_ivf
+from n1.utils_box import freqs, rfft2_reals
+from n1.utils_n1 import cli
 
 class box:
     def __init__(self, lside, npix):

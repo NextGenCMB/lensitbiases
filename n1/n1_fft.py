@@ -1,65 +1,11 @@
-r"""One must multiply W^ST W^{SpTp}   (XY IJ in original notation) by f^{SSp}_{l1 l1'} f^{TTp}_{l2 l2'}
-    This gives rise to terms like
-      (W^{ST} * il1 C_l1^{SSp}  il2 C_l2^{TTp} ) * (W^{SpTp}                                   )
-    + (W^{ST} * il1 C_l1^{SSp}                 ) * (W^{SpTp}                   il2  C_l2^{TTp} )
-    + (W^{ST} *                 il2 C_l2^{TTp} ) * (W^{SpTp}  il1  C_l1 ^{TTp}                  )
-    + (W^{ST} *                                ) * (W^{SpTp}) il1  C_l1 ^{SSp} il2  C_l2^{TTp} )
-
-    Each Cl^{SSp} contains a factor R^{SX} R^{Sp Y} C^{XY}, the sum over S is a delta in the TEB fields, giving
-
-   [  W_{pL}^{ST, 1_a 2_b}(r) * W_{mL}^{ST,        }(r)
-    + W_{pL}^{ST, 1_a    }(r) * W_{mL}^{ST,     2_b}(r)
-    + W_{pL}^{ST,     2_b}(r) * W_{mL}^{ST, 1_a    }(r)
-    + W_{pL}^{ST,        }(r) * W_{mL}^{ST, 1_a 2_b}(r)] * xi_ab(r)
-
-    A trace is intended on the Stokes indices. A factor i l_a C_l^{XY} comes in the relevant place,
-    forming e.g. (C^w C^{f,-1}C^w)^{XY} terms
-
-
-    Symmetries:
-        W_{-L}^{ST, 0   0} = W_{+L}^{TS,  0  0}
-
-
-    Reality conditions:
-        W_{L}^{SS, 0, 0} OK, W_{L}^{QU, 0, 0} no
+r"""rFFT N1 main module
 
 """
 import numpy as np
-from n1.n1_utils import extcl, box
+from n1.utils_n1 import extcl, cls_dot
+from n1.box import box
 
-def _cldict2arr(cls_dict):
-    lmaxp1 = np.max([len(cl) for cl in cls_dict.values()])
-    ret = np.zeros((3, 3, lmaxp1), dtype=float)
-    for i, x in enumerate(['t', 'e', 'b']):
-        for j, y in enumerate(['t', 'e', 'b']):
-            ret[i, j] =  extcl(lmaxp1 - 1, cls_dict.get(x + y, cls_dict.get(y + x, np.array([0.]))))
-    return ret
-
-def cls_dot(cls_list):
-    """T E B spectral matrices product
-
-        Args:
-            list of dict cls spectral matrices to multiply (given as dictionaries or (3, 3, lmax + 1) arrays
-
-        Returns:
-            (3, 3, lmax + 1) array where 0, 1, 2 stands for T E B
-
-
-    """
-    if  len(cls_list) == 1:
-        return _cldict2arr(cls_list[0]) if isinstance(cls_list[0], dict) else cls_list[0]
-    cls = cls_dot(cls_list[1:])
-    cls_0 =  _cldict2arr(cls_list[0]) if isinstance(cls_list[0], dict) else cls_list[0]
-    ret = np.zeros_like(cls_0)
-    for i in range(3):
-        for j in range(3):
-            for k in range(3):
-                ret[i, j] += cls_0[i, k] * cls[k, j]
-    return ret
-
-
-
-class stokes:
+class n1_fft:
     def __init__(self, fals, cls_w, cls_f, cpp, lminbox=50, lmaxbox=2500):
 
         lside = 2. * np.pi / lminbox
