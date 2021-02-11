@@ -51,6 +51,7 @@ class n1_fft:
                   lminbox: a 2d flat-sky will be constructed with this as minimum multipole
                   lmaxbox: a 2d flat-sky will be constructed with this as maximum multipole along an axis
 
+            There are presumably still possible speed-ups in the small-box regime where the ffts does not actually dominate the cost
 
         """
 
