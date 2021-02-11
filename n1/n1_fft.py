@@ -2,11 +2,47 @@ r"""rFFT N1 main module
 
 """
 import numpy as np
-from n1.utils_n1 import extcl, cls_dot
+from n1.utils_n1 import extcl, cls_dot, prepare_cls
 from n1.box import box
+
+def get_n1(k, Ls, jt_TP):
+    """Example to show how to get N1 for a set of key and cls, using the Planck defaults FFP10 spectra and config
+
+        Args:
+            k: Quadratic estimator key ('p': MV (SQE with jt_TP set to False, or GMV with jt_TP set to True)
+                                        (see https://arxiv.org/abs/2101.12193 for the differences between these estimators)
+                                        'ptt': TT-only QE
+                                        'p_p': Pol-only QE
+            Ls: list of multipole wanted
+            jt_TP: uses joint temperature and polarization filtering if set, separate if not
+
+        Returns:
+
+            N1 bias for each L in Ls
+
+    """
+    assert k in ['p', 'p_p', 'ptt'], k
+    # --- loads fitler, QE weights and response CMB spectra
+    fals, cls_weights, cls_grad, cpp = prepare_cls(k, jt_TP=jt_TP)
+    # --- instantiation
+    n1lib = n1_fft(fals, cls_weights, cls_grad, cpp)
+    # --- computing the biases
+    return np.array([n1lib.get_n1(k, L) for L in Ls])
+
 
 class n1_fft:
     def __init__(self, fals, cls_w, cls_f, cpp, lminbox=50, lmaxbox=2500):
+        r""" N1 calculator main module
+
+            Args:
+                  fals: dict of inverse-variance filtering cls
+                  cls_w: Quadratic estimator CMB spectra (mapping the inverse-variance filtered maps to the Wiener-filtered CMB)
+                  cls_f: CMB spectra entering the response function of the CMB to lensing (in principle the grad-lensed Cls)
+                  lminbox: a 2d flat-sky will be constructed with this as minimum multipole
+                  lmaxbox: a 2d flat-sky will be constructed with this as maximum multipole along an axis
+
+
+        """
 
         lside = 2. * np.pi / lminbox
         npix = int(lmaxbox / np.pi * lside) + 1
