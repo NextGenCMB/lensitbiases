@@ -1,4 +1,10 @@
-r"""rFFT N1 main module
+r"""rFFT N1 and N1 matrix main module
+
+    FFT-based N1 calculations (~ in O(ms) time per lensing multipole for Planck-like config)
+
+    This uses 5 rfft's of moderate size per L for TT, 20 for PP, 45 for MV (SQE or GMV)
+
+    Calculation of the N1 matrix comes for all cases with just 2 additional rfft's
 
 
     Note:
@@ -12,7 +18,7 @@ import numpy as np
 from n1.utils_n1 import extcl, cls_dot, prepare_cls
 from n1.box import box
 
-def get_n1(k, Ls, jt_TP, lminbox=50, lmaxbox=2500):
+def get_n1(k, Ls, jt_TP, do_n1mat=True, lminbox=50, lmaxbox=2500):
     """Example to show how to get N1 for a set of key and cls, using the Planck defaults FFP10 spectra and config
 
         Args:
@@ -22,14 +28,29 @@ def get_n1(k, Ls, jt_TP, lminbox=50, lmaxbox=2500):
                                         'p_p': Pol-only QE
             Ls: list of multipole wanted
             jt_TP: uses joint temperature and polarization filtering if set, separate if not
+            do_n1mat: returns N1 matrix as well if set
             lminbox: minimum multipole of the 2D box used
             lmaxbox: maximum multipole of the 2D box used along an axis
                     (often this can be kept fairly small since high lensing multipoles contribute very little)
 
 
+        Note:
+
+            In all cases the calculation of the N1 matrix only uses two additional rfft's, thus coming basically at the same cost
+
         Returns:
 
-            N1 bias for each L in Ls
+            if do_n1mat is set:
+                N1, N1mat and ls, where N1 is the bias array, N1mat the matrix N1_{LL'} and ls the multipole present in the 2D box.
+                The N1 matrix is zero whenever L' is not in ls
+                It holds:
+
+                    :math:`\sum_{L'} N1_{LL'} C^{pp}_L' = N^{(0)}_{L}`
+
+                where :math:`C^{pp}_L` is the anisotropy source spectrum
+
+            if do_n1mat is not set:
+                M1 array for all L in Ls
 
     """
     assert k in ['p', 'p_p', 'ptt'], k
@@ -38,7 +59,19 @@ def get_n1(k, Ls, jt_TP, lminbox=50, lmaxbox=2500):
     # --- instantiation
     n1lib = n1_fft(fals, cls_weights, cls_grad, cpp, lminbox=lminbox, lmaxbox=lmaxbox)
     # --- computing the biases
-    return np.array([n1lib.get_n1(k, L) for L in Ls])
+    if not do_n1mat:
+        return np.array([n1lib.get_n1(k, L, do_n1mat=False) for L in Ls])
+    else:
+        n1mat = np.zeros((len(Ls), n1lib.box.lmaxbox + 1))
+        n1 = np.zeros(len(Ls))
+        for i, L in enumerate(Ls):
+            tn1, tn1mat = n1lib.get_n1(k, L, do_n1mat=True)
+            n1mat[i] = tn1mat
+            n1[i] = tn1
+        ls, = np.where(n1lib.box.mode_counts() > 0)
+        return n1, n1mat, ls
+
+
 
 
 class n1_fft:
@@ -88,8 +121,8 @@ class n1_fft:
         # === precalc of deflection corr fct:
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
-        self.xipp = {0 : np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2),  # 00, 11.T
-                     1 : np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny) } # 01 or 10
+        self.xipp = np.array([np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2),
+                              np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny)])# 01 or 10
         del nx, ny, ls
 
         # === normalization (for lensing keys at least)
@@ -610,27 +643,28 @@ class n1_fft:
         return i_sign* (W1 + W2)#, W1, W2
 
     def _get_n1_TS(self, T, S, _rfft=True, verbose=False):
+        """Factors of xi_00 and xi_11 in N1 for T != S """
         assert T != S
         ift = np.fft.irfft2 if _rfft else np.fft.ifft2
         W_re, W_im, W00_re, W00_im, W_01_re, W_01_im, W_0z_re, W_0z_im, W_z0_re, W_z0_im = ift(np.array(self._W_TS_odiag(T, S, verbose=verbose)))
         # UQ_{0,z} = - QU_{z, 0}^dagger
         sgn_Q = 1 if 'Q' in [T, S] else -1  # symmetry taking W_(1,) to W_(0,) takes a (-1)^{ (S = Q) + (T = Q)}
-        n1_TS =           np.sum(self.xipp[0] * (W00_re  * W_re         + W00_im * W_im))
-        n1_TS +=          np.sum(self.xipp[1] * (W_01_re * W_re         + W_01_im * W_im))
-        n1_TS +=          np.sum(self.xipp[0] * (W_0z_re * W_z0_re      + W_0z_im * W_z0_im))
-        n1_TS += sgn_Q  * np.sum(self.xipp[1] * (W_0z_re * (-W_z0_re.T) - W_0z_im * W_z0_im.T))
-        return 4 * n1_TS
+        term_00 = 4. * ( (W00_re  * W_re         + W00_im * W_im) + (W_0z_re * W_z0_re      + W_0z_im * W_z0_im))
+        term_01 = 4. * ( (W_01_re * W_re         + W_01_im * W_im) + sgn_Q * (W_0z_re * (-W_z0_re.T) - W_0z_im * W_z0_im.T))
+        return np.array([term_00, term_01])
 
     def _get_n1_SS(self, S, _rfft=True):
+        """Factors of xi_00 and xi_11 in N1 for T == S """
         ift = np.fft.irfft2 if _rfft else np.fft.ifft2
         SS, SS_00, SS_01_re, SS_0z_re, SS_0z_im = ift(np.array(self._W_SS_diag(S)))
-        n1_SS =   np.sum(self.xipp[0] * (SS * SS_00    - (SS_0z_re ** 2         - SS_0z_im ** 2)))
-        n1_SS +=  np.sum(self.xipp[1] * (SS * SS_01_re - (SS_0z_re * SS_0z_re.T - SS_0z_im * SS_0z_im.T)))
-        return 2 * n1_SS
+        term_00 =  2 * (SS * SS_00    - (SS_0z_re ** 2         - SS_0z_im ** 2))
+        term_01 =  2 * (SS * SS_01_re - (SS_0z_re * SS_0z_re.T - SS_0z_im * SS_0z_im.T))
+        return np.array([term_00, term_01])
 
-    def get_n1(self, k, L, _optimize=2):
+    def get_n1(self, k, L, do_n1mat=True, _optimize=2):
         L = float(L)
         _rfft = True
+        n1_mat = 0
         if _optimize == 2:
              _optimize = 1 if k == 'p_p' else 2
         if _optimize==0:  #--- raw, slower version serving as test case
@@ -681,23 +715,25 @@ class n1_fft:
 
             self._build_key(k, L, rfft=_rfft)
             if k == 'p':
-                n1_QQ = self._get_n1_SS('Q')
-                n1_UU = self._get_n1_SS('U')
-                n1_TT = self._get_n1_SS('T')
-                n1_QU = self._get_n1_TS('Q', 'U')
-                n1 = n1_TT + n1_QQ + n1_UU + n1_QU
-                n1 += self._get_n1_TS('T', 'Q') + self._get_n1_TS('T', 'U')
+                terms  = self._get_n1_SS('Q') + self._get_n1_SS('U') + self._get_n1_SS('T')
+                terms += self._get_n1_TS('Q', 'U') + self._get_n1_TS('T', 'Q') + self._get_n1_TS('T', 'U')
+
             elif k =='ptt':
-                n1 = self._get_n1_SS('T')
+                terms = self._get_n1_SS('T')
             elif k == 'p_p':
-                n1_QQ = self._get_n1_SS('Q')
-                n1_UU = self._get_n1_SS('U')
-                n1_QU = self._get_n1_TS('Q', 'U')
-                n1 = n1_QQ + n1_UU + n1_QU
+                terms  = self._get_n1_SS('Q') + self._get_n1_SS('U') + self._get_n1_TS('Q', 'U')
             else:
                 assert 0, k + 'not implemented'
+            n1 =  np.sum(self.xipp * terms)
+            if do_n1mat:
+                ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
+                f1 = np.fft.rfft2(terms[0]) * ny ** 2
+                f2 = np.fft.rfft2(terms[1]) * nx * ny
+                n1_mat = - self.box.sum_in_l(f1.real + f2.real) / np.prod(self.box.shape)
+            else:
+                n1_mat = 0.
         else:
             n1 = 0
             assert 0
         self._destroy_key(k)
-        return -self.norm * n1
+        return -self.norm * n1 if not do_n1mat else (-self.norm * n1, - self.norm * n1_mat)
