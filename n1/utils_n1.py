@@ -63,26 +63,26 @@ def cls_dot(cls_list):
                 ret[i, j] += cls_0[i, k] * cls[k, j]
     return ret
 
-def get_fal(jt_tp=False):
+def get_fal(lmin_ivf=100, lmax_ivf=2048, nlevt=35., nlevp=55., beam=6.5, jt_tp=False):
     """Loads default filtering and inverse-variance filtered spectral matrices for test cases
 
         Args:
+            lmin_ivf: minimum CMB multipole fed into the QE
+            lmax_ivf: maximum CMB multipole fed into the QE
+            nlevt: noise level in temperature
+            nlevp: noise level in polarizatiion
+            beam: beam fwhm width in arcmin
             jt_tp: True of joint temperature-polarisation filtering, False if not
 
+        Returns:
+            spectral matrix of the inverse-variance filtered CMB, filtering matrix and lmax_ivf
 
     """
-    from plancklens.patchy import patchy
-    import healpy as hp
-    lmax_ivf = 2048
-    lmin_ivf = 100
-    nlevt = 35.
-    nlevp = 55.
-    beam = 6.5
     path = os.path.abspath(os.path.dirname(n1.__file__))
     cls_len = camb_clfile(os.path.join(path, 'data','cls', 'FFP10_wdipole_lensedCls.dat'))
-    transf = hp.gauss_beam(beam / 60 / 180 * np.pi, lmax=lmax_ivf)
-    ivcl, fal = patchy.get_ivf_cls(cls_len, cls_len, lmin_ivf, lmax_ivf, nlevt, nlevp, nlevt, nlevp, transf,
-                                   jt_tp=jt_tp)
+    l = np.arange(lmax_ivf + 1, dtype=int)
+    transf = np.exp(-l * (l + 1.) * (beam / 60 / 180 * np.pi/ 2.3548200450309493) ** 2 * 0.5)
+    ivcl, fal = get_ivf_cls(cls_len, cls_len, lmin_ivf, lmax_ivf, nlevt, nlevp, nlevt, nlevp, transf,  jt_tp=jt_tp)
     return ivcl, fal, lmax_ivf
 
 

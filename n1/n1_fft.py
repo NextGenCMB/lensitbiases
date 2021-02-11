@@ -1,11 +1,17 @@
 r"""rFFT N1 main module
 
+
+    Note:
+        This assumes (but does not check for) :math:`C_\ell^{TB} = C_\ell^{EB} = 0` throughout
+        (If otherwise required this can adapted with little work if needed)
+
+
 """
 import numpy as np
 from n1.utils_n1 import extcl, cls_dot, prepare_cls
 from n1.box import box
 
-def get_n1(k, Ls, jt_TP):
+def get_n1(k, Ls, jt_TP, lminbox=50, lmaxbox=2500):
     """Example to show how to get N1 for a set of key and cls, using the Planck defaults FFP10 spectra and config
 
         Args:
@@ -15,6 +21,10 @@ def get_n1(k, Ls, jt_TP):
                                         'p_p': Pol-only QE
             Ls: list of multipole wanted
             jt_TP: uses joint temperature and polarization filtering if set, separate if not
+            lminbox: minimum multipole of the 2D box used
+            lmaxbox: maximum multipole of the 2D box used along an axis
+                    (often this can be kept fairly small since high lensing multipoles contribute very little)
+
 
         Returns:
 
@@ -22,10 +32,10 @@ def get_n1(k, Ls, jt_TP):
 
     """
     assert k in ['p', 'p_p', 'ptt'], k
-    # --- loads fitler, QE weights and response CMB spectra
+    # --- loads example filter, QE weights, response CMB spectra and anisotropy source spectrum
     fals, cls_weights, cls_grad, cpp = prepare_cls(k, jt_TP=jt_TP)
     # --- instantiation
-    n1lib = n1_fft(fals, cls_weights, cls_grad, cpp)
+    n1lib = n1_fft(fals, cls_weights, cls_grad, cpp, lminbox=lminbox, lmaxbox=lmaxbox)
     # --- computing the biases
     return np.array([n1lib.get_n1(k, L) for L in Ls])
 
@@ -76,13 +86,11 @@ class n1_fft:
         # === precalc of deflection corr fct:
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
-
         self.xipp = {0 : np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2),  # 00, 11.T
                      1 : np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny) } # 01 or 10
-
         del nx, ny, ls
 
-        # === normalization (for tt keys at least)
+        # === normalization (for lensing keys at least)
         norm = (self.box.shape[0] / self.box.lsides[0]) ** 4  # overall final normalization from rfft'ing
         norm *= (float(self.box.lminbox)) ** 8
         # :always 2 powers in xi_ab, 4 powers of ik_x or ik_y in XY and IJ weights, and two add. powers matching xi_ab's from the responses
@@ -115,7 +123,6 @@ class n1_fft:
 
 
     def _build_key(self, k, L, rfft=False):
-
         self.l1s =  np.array(self._get_shifted_lylx_sym(-L * 0.5, rfft=rfft))  # this is q + L/2
         self.l2s = -np.array(self._get_shifted_lylx_sym (L * 0.5, rfft=rfft))  # this is -(q - L/2) = L/2 - q
         self.l1_int = self.box.rsqd2l(np.sum(self.l1s ** 2, axis=0))
