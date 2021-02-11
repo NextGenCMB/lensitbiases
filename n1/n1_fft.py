@@ -3,7 +3,8 @@ r"""rFFT N1 main module
 
     Note:
         This assumes (but does not check for) :math:`C_\ell^{TB} = C_\ell^{EB} = 0` throughout
-        (If otherwise required this can adapted with little work if needed)
+
+        (If otherwise required this can adapted with little work)
 
 
 """

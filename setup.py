@@ -8,11 +8,6 @@ with open("README.md", "r") as fh:
 
 def configuration(parent_package='', top_path=''):
     config = Configuration('', parent_package, top_path)
-    fmods = glob.glob('n1/n1f*.f90')
-    for fmod in fmods:
-        name = 'n1.' + (fmod.split('/')[1]).replace('.f90', '')
-        config.add_extension(name , [fmod],
-                         libraries=['gomp'],  extra_compile_args=['-Xpreprocessor', '-fopenmp', '-w'])
     return config
 
 setup(

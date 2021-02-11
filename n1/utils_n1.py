@@ -69,8 +69,8 @@ def get_fal(lmin_ivf=100, lmax_ivf=2048, nlevt=35., nlevp=55., beam=6.5, jt_tp=F
         Args:
             lmin_ivf: minimum CMB multipole fed into the QE
             lmax_ivf: maximum CMB multipole fed into the QE
-            nlevt: noise level in temperature
-            nlevp: noise level in polarizatiion
+            nlevt: noise level in temperature in uKarcmin
+            nlevp: noise level in polarizatiion in uKarcmin
             beam: beam fwhm width in arcmin
             jt_tp: True of joint temperature-polarisation filtering, False if not
 
