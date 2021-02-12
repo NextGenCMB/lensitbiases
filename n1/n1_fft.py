@@ -65,7 +65,7 @@ def get_n1(k, Ls, jt_TP, do_n1mat=True, lminbox=50, lmaxbox=2500):
     ivfs_cls, fals, cls_weights, cls_grad, cpp = prepare_cls(k, jt_TP=jt_TP)
     # --- instantiation
     n1lib = n1_fft(fals, cls_weights, cls_grad, cpp, lminbox=lminbox, lmaxbox=lmaxbox)
-    # --- computing the biases
+    # --- computing the biases with or without the n1 matrix:
     if not do_n1mat:
         return np.array([n1lib.get_n1(k, L, do_n1mat=False) for L in Ls])
     else:

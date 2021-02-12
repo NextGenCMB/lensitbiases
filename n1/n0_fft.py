@@ -4,10 +4,11 @@ from n1.utils_n1 import extcl, cls_dot
 from n1.box import box
 import pyfftw
 
+
 class n0_fft:
-    def __init__(self, cls_ivfs, cls_w,  lminbox=50, lmaxbox=2500):
+    def __init__(self, cls_ivfs, cls_w, lminbox=50, lmaxbox=2500):
         lside = 2. * np.pi / lminbox
-        npix = int(lmaxbox / np.pi * lside) + 1
+        npix = int(2 * lmaxbox / float(lminbox)) + 1
         if npix % 2 == 1: npix += 1
 
         # ===== instance with 2D flat-sky box info
@@ -19,9 +20,9 @@ class n0_fft:
         cls_ivfs = {k: extcl(self.box.lmaxbox + lminbox, cls_ivfs[k]) for k in cls_ivfs.keys()}  # filtered maps spectra
         cls_w = {k: extcl(self.box.lmaxbox + lminbox, cls_w[k]) for k in cls_w.keys()}  # estimator weights spectra
 
-        self.K_ls = cls_dot([cls_ivfs])
-        self.Kw_ls = cls_dot([cls_ivfs, cls_w])
-        self.wK_ls = cls_dot([cls_w, cls_ivfs])
+        self.K_ls   = cls_dot([cls_ivfs])
+        self.Kw_ls  = cls_dot([cls_ivfs, cls_w])
+        self.wK_ls  = cls_dot([cls_w, cls_ivfs])
         self.wKw_ls = cls_dot([cls_w, cls_ivfs, cls_w])
 
         self._cos2p_sin2p = None
@@ -97,7 +98,7 @@ class n0_fft:
                         Fs[2] +=     ir2(K * fac)  * ir2(wKw_01 * fac) + ir2(Kw_0 * fac) * ir2(wK_1 * fac)
         Fyy, Fxx, Fxy = np.fft.rfft2(Fs).real
         n0_2d_gg = ny ** 2 * Fyy + nx ** 2 * Fxx + 2 * nx * ny * Fxy    # lensing gradient
-        n0_2d_cc = nx ** 2 * Fyy + ny ** 2 * Fxx - 2 * nx * ny * Fxy  # lensing curl
+        n0_2d_cc = nx ** 2 * Fyy + ny ** 2 * Fxx - 2 * nx * ny * Fxy    # lensing curl
 
         return - self.norm * np.array([n0_2d_gg, n0_2d_cc])
 
@@ -147,7 +148,7 @@ class n0_fft:
             wK_1   =  self.Kw_ls [j, i][ls] * (1j * nx)
             Ss = SsX[X]
             Ts = SsX[Y]
-            for S, T in zip(Ss, Ts): # diag
+            for S, T in zip(Ss, Ts):   # diag
                 fac = self._X2S(S, X) * self._X2S(T, Y)
                 Fxx  +=  (ir2(K * fac)  * ir2(wKw_11 * fac) + ir2(Kw_1 * fac) * ir2(wK_1 * fac))
             for i, S in enumerate(Ss): # off-diag

@@ -1,5 +1,8 @@
 import numpy as np
 
+def lminlmax2npix(lminbox, lmaxbox):
+    return  np.int_(2 * lmaxbox / lminbox + 1)
+
 def freqs(i, N):
     """Outputs the absolute integers frequencies [0,1,...,N/2,N/2-1,...,1]
          in numpy fft convention as integer i runs from 0 to N-1.
