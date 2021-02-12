@@ -96,12 +96,38 @@ class n0_fft:
                         Fs[1] +=     ir2(K * fac)  * ir2(wKw_11 * fac) + ir2(Kw_1 * fac) * ir2(wK_1 * fac)
                         Fs[2] +=     ir2(K * fac)  * ir2(wKw_01 * fac) + ir2(Kw_0 * fac) * ir2(wK_1 * fac)
         Fyy, Fxx, Fxy = np.fft.rfft2(Fs).real
-        return - self.norm * (ny ** 2 * Fyy + nx ** 2 * Fxx + 2 * nx * ny * Fxy)
+        n0_2d_gg = ny ** 2 * Fyy + nx ** 2 * Fxx + 2 * nx * ny * Fxy    # lensing gradient
+        n0_2d_cc = nx ** 2 * Fyy + ny ** 2 * Fxx - 2 * nx * ny * Fxy  # lensing curl
+
+        return - self.norm * np.array([n0_2d_gg, n0_2d_cc])
 
     def get_n0(self, k, _pyfftw=True):
-        """Returns unormalized QE noise for multipole along an axis of the box
+        """Returns unormalized-QE noise for multipole along an axis of the box
 
-            This uses 1-dimensional rfft on a subset of the terms
+            Args:
+
+                k: QE key. Here only 'ptt', 'p_p' and 'p' are supported, for TT, P-only and 'MV' estimators.
+                _pyfftw: uses pfttw FFT's by default, falls back to numpy ffts if unset
+
+            Note:
+
+                Depending on the weight and filtered CMB spectra given as input to the instance the output
+                can be made to to match the 'GMV' or 'SQE' estimator
+
+            Note:
+
+                This assumes (but does not for) that for all spectra :math:`C_\ell^{TB} = C_\ell^{EB} = 0`
+
+            Returns:
+
+                *Unormalized* QE Gaussian noise level, for the lensing gradient and lensing curl mode
+
+            Note:
+
+                To get the true :math:`N_L^{(0)}` this must be multiplied by the normalization (inverse response)
+                applied to the estimator, often called :math:`A_L` or :math:`\frac{1}{\mathcal R_L}`
+
+            This uses 1-dimensional rfft on a subset of the terms used for the 2D map
 
 
         """
@@ -110,26 +136,30 @@ class n0_fft:
         nx = self.box.nx_1d
         ls = self.box.ls()
 
-        Ss = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+        SsX =  {'T': ['T'], 'E': ['Q', 'U'], 'B':['Q', 'U']}
         XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
-        for XY in XYs:
-            X, Y = XY
-            i = X2i[X]
-            j = X2i[Y]
-            K      =       self.K_ls[i, j][ls]
-            wKw_11 =  -1 * self.wKw_ls[i, j][ls] * nx ** 2
-            Kw_1   =  1j * self.Kw_ls [i, j][ls] * nx
-            wK_1   =  1j * self.Kw_ls [j, i][ls] * nx
-            for i, S in enumerate(Ss):
-                X2S = self._X2S(S, X)
-                for T in Ss[i:] * (np.any(X2S)):
-                    Y2T = self._X2S(T, Y)
-                    if np.any(Y2T):
-                        fac = X2S * Y2T
-                        Fxx  +=  (1 + (S != T)) * ir2(K * fac)  * ir2(wKw_11 * fac) + ir2(Kw_1 * fac) * ir2(wK_1 * fac)
-        # 1d fft method using only F11
-        return -self.norm * self.box.nx_1d[:-1] ** 2 * np.sum(np.fft.rfft(Fxx).real, axis=0)[:-1], self.box.nx_1d[:-1] * self.box.lminbox
+        for X, Y in XYs:
+            i = X2i[X]; j = X2i[Y]
+            K      =  self.K_ls  [i, j][ls]
+            wKw_11 =  self.wKw_ls[i, j][ls] * (-1 * (nx ** 2))
+            Kw_1   =  self.Kw_ls [i, j][ls] * (1j * nx)
+            wK_1   =  self.Kw_ls [j, i][ls] * (1j * nx)
+            Ss = SsX[X]
+            Ts = SsX[Y]
+            for S, T in zip(Ss, Ts): # diag
+                fac = self._X2S(S, X) * self._X2S(T, Y)
+                Fxx  +=  (ir2(K * fac)  * ir2(wKw_11 * fac) + ir2(Kw_1 * fac) * ir2(wK_1 * fac))
+            for i, S in enumerate(Ss): # off-diag
+                for T in Ts[i + 1:]:
+                    fac =  np.sqrt(2.) * self._X2S(S, X) * self._X2S(T, Y)
+                    Fxx += (ir2(K * fac) * ir2(wKw_11 * fac) + ir2(Kw_1 * fac) * ir2(wK_1 * fac))
+
+        # 1d fft mehod using only F11
+        n0_gg = self.box.nx_1d ** 2 * np.sum(np.fft.rfft(Fxx, axis=1).real, axis=0)  # lensing gradient n0
+        n0_cc = self.box.nx_1d ** 2 * np.sum(np.fft.rfft(Fxx, axis=0).real, axis=1)  # lensing curl n0
+        return -self.norm * np.array([n0_gg, n0_cc]), np.abs(self.box.nx_1d) * self.box.lminbox
+
 
 
 
