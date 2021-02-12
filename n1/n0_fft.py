@@ -132,10 +132,10 @@ class n0_fft:
 
         """
         Fxx = np.zeros(self.box.shape, dtype=float) # 00, 11 and 01 components
-        X2i = {'T': 0, 'E': 1, 'B': 2}
         nx = self.box.nx_1d
         ls = self.box.ls()
 
+        X2i = {'T': 0, 'E': 1, 'B': 2}
         SsX =  {'T': ['T'], 'E': ['Q', 'U'], 'B':['Q', 'U']}
         XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
