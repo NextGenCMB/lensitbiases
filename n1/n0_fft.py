@@ -74,28 +74,37 @@ class n0_fft:
 
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
         Ss = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+        Ts = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+
         XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
-
-        for XY in XYs:  # TT, TE, ET, EE, BB
-            X,Y = XY
-            i = X2i[X]
-            j = X2i[Y]
-            K      =       self.K_ls  [i, j][ls]
-            wKw_00 =  -1 * self.wKw_ls[i, j][ls] * ny * ny
-            wKw_11 =  -1 * self.wKw_ls[i, j][ls] * nx * nx
-            wKw_01 =  -1 * self.wKw_ls[i, j][ls] * nx * ny
-
-            Kw_0    = 1j * self.Kw_ls [i, j][ls] * ny
-            Kw_1    = 1j * self.Kw_ls [i, j][ls] * nx
-            wK_0   =  1j * self.Kw_ls [j, i][ls] * ny
-            wK_1   =  1j * self.Kw_ls [j, i][ls] * nx
-            for S in Ss:
-                for T in Ss:
+        for S in Ss:
+            for T in Ts:
+                K = np.zeros(self.box.rshape, dtype=complex)
+                wKw_11 = np.zeros(self.box.rshape, dtype=complex)
+                wKw_00 = np.zeros(self.box.rshape, dtype=complex)
+                wKw_01 = np.zeros(self.box.rshape, dtype=complex)
+                wK_1 = np.zeros(self.box.rshape, dtype=complex)
+                Kw_1 = np.zeros(self.box.rshape, dtype=complex)
+                wK_0 = np.zeros(self.box.rshape, dtype=complex)
+                Kw_0 = np.zeros(self.box.rshape, dtype=complex)
+                for XY in XYs:  # TT, TE, ET, EE, BB
+                    X,Y = XY
                     fac = self._X2S(S, X) * self._X2S(T, Y)
                     if np.any(fac):
-                        Fs[0] +=     ir2(K * fac)  * ir2(wKw_00 * fac) + ir2(Kw_0 * fac) * ir2(wK_0 * fac)
-                        Fs[1] +=     ir2(K * fac)  * ir2(wKw_11 * fac) + ir2(Kw_1 * fac) * ir2(wK_1 * fac)
-                        Fs[2] +=     ir2(K * fac)  * ir2(wKw_01 * fac) + ir2(Kw_0 * fac) * ir2(wK_1 * fac)
+                        i = X2i[X];j = X2i[Y]
+                        K      +=       self.K_ls  [i, j][ls] * fac
+                        wKw_00 +=  -1 * self.wKw_ls[i, j][ls] * ny * ny * fac
+                        wKw_11 +=  -1 * self.wKw_ls[i, j][ls] * nx * nx * fac
+                        wKw_01 +=  -1 * self.wKw_ls[i, j][ls] * nx * ny * fac
+
+                        Kw_0   += 1j * self.Kw_ls [i, j][ls] * ny * fac
+                        Kw_1   += 1j * self.Kw_ls [i, j][ls] * nx * fac
+                        wK_0   +=  1j * self.Kw_ls [j, i][ls] * ny * fac
+                        wK_1   +=  1j * self.Kw_ls [j, i][ls] * nx * fac
+
+                Fs[0] +=     ir2(K)  * ir2(wKw_00) + ir2(Kw_0) * ir2(wK_0)
+                Fs[1] +=     ir2(K)  * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1)
+                Fs[2] +=     ir2(K)  * ir2(wKw_01) + ir2(Kw_0) * ir2(wK_1)
         Fyy, Fxx, Fxy = np.fft.rfft2(Fs).real
         n0_2d_gg = ny ** 2 * Fyy + nx ** 2 * Fxx + 2 * nx * ny * Fxy    # lensing gradient
         n0_2d_cc = nx ** 2 * Fyy + ny ** 2 * Fxx - 2 * nx * ny * Fxy    # lensing curl
@@ -137,24 +146,40 @@ class n0_fft:
         ls = self.box.ls()
 
         X2i = {'T': 0, 'E': 1, 'B': 2}
-        SsX =  {'T': ['T'], 'E': ['Q', 'U'], 'B':['Q', 'U']}
+        Ss =  ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+        Ts =  ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
         XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
-        for X, Y in XYs:
-            i = X2i[X]; j = X2i[Y]
-            K      =  self.K_ls  [i, j][ls]
-            wKw_11 =  self.wKw_ls[i, j][ls] * (-1 * (nx ** 2))
-            Kw_1   =  self.Kw_ls [i, j][ls] * (1j * nx)
-            wK_1   =  self.Kw_ls [j, i][ls] * (1j * nx)
-            Ss = SsX[X]
-            Ts = SsX[Y]
-            for S, T in zip(Ss, Ts):   # diag
+
+        for S, T in zip(Ss, Ts):  # diag
+            K = np.zeros(self.box.rshape, dtype=complex)
+            wKw_11 = np.zeros(self.box.rshape, dtype=complex)
+            wK_1 = np.zeros(self.box.rshape, dtype=complex)
+            Kw_1 = np.zeros(self.box.rshape, dtype=complex)
+            for X, Y in XYs:
+                i = X2i[X]; j = X2i[Y]
                 fac = self._X2S(S, X) * self._X2S(T, Y)
-                Fxx  +=  (ir2(K * fac)  * ir2(wKw_11 * fac) + ir2(Kw_1 * fac) * ir2(wK_1 * fac))
-            for i, S in enumerate(Ss): # off-diag
-                for T in Ts[i + 1:]:
-                    fac =  np.sqrt(2.) * self._X2S(S, X) * self._X2S(T, Y)
-                    Fxx += (ir2(K * fac) * ir2(wKw_11 * fac) + ir2(Kw_1 * fac) * ir2(wK_1 * fac))
+                K      +=  self.K_ls  [i, j][ls] * fac
+                wKw_11 +=  self.wKw_ls[i, j][ls] * (-1 * (nx ** 2)) * fac
+                Kw_1   +=  self.Kw_ls [i, j][ls] * (1j * nx) * fac
+                wK_1   +=  self.Kw_ls [j, i][ls] * (1j * nx) * fac
+            Fxx += (ir2(K) * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1))
+
+        for i, S in enumerate(Ss):  # off-diag
+            for T in Ts[i + 1:]:
+                K = np.zeros(self.box.rshape, dtype=complex)
+                wKw_11 = np.zeros(self.box.rshape, dtype=complex)
+                wK_1 = np.zeros(self.box.rshape, dtype=complex)
+                Kw_1 = np.zeros(self.box.rshape, dtype=complex)
+                for X, Y in XYs:
+                    i = X2i[X]
+                    j = X2i[Y]
+                    fac = self._X2S(S, X) * self._X2S(T, Y)
+                    K += self.K_ls[i, j][ls] * fac
+                    wKw_11 += self.wKw_ls[i, j][ls] * (-1 * (nx ** 2)) * fac
+                    Kw_1 += self.Kw_ls[i, j][ls] * (1j * nx) * fac
+                    wK_1 += self.Kw_ls[j, i][ls] * (1j * nx) * fac
+                Fxx += 2. * (ir2(K) * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1))
 
         # 1d fft mehod using only F11
         n0_gg = self.box.nx_1d ** 2 * np.sum(np.fft.rfft(Fxx, axis=1).real, axis=0)  # lensing gradient n0
