@@ -159,10 +159,11 @@ class n0_fft:
             for X, Y in XYs:
                 i = X2i[X]; j = X2i[Y]
                 fac = self._X2S(S, X) * self._X2S(T, Y)
-                K      +=  self.K_ls  [i, j][ls] * fac
-                wKw_11 +=  self.wKw_ls[i, j][ls] * (-1 * (nx ** 2)) * fac
-                Kw_1   +=  self.Kw_ls [i, j][ls] * (1j * nx) * fac
-                wK_1   +=  self.Kw_ls [j, i][ls] * (1j * nx) * fac
+                if np.any(fac):
+                    K      +=  self.K_ls  [i, j][ls] * fac
+                    wKw_11 +=  self.wKw_ls[i, j][ls] * (-1 * (nx ** 2)) * fac
+                    Kw_1   +=  self.Kw_ls [i, j][ls] * (1j * nx) * fac
+                    wK_1   +=  self.Kw_ls [j, i][ls] * (1j * nx) * fac
             Fxx += (ir2(K) * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1))
 
         for i, S in enumerate(Ss):  # off-diag
@@ -175,10 +176,11 @@ class n0_fft:
                     i = X2i[X]
                     j = X2i[Y]
                     fac = self._X2S(S, X) * self._X2S(T, Y)
-                    K += self.K_ls[i, j][ls] * fac
-                    wKw_11 += self.wKw_ls[i, j][ls] * (-1 * (nx ** 2)) * fac
-                    Kw_1 += self.Kw_ls[i, j][ls] * (1j * nx) * fac
-                    wK_1 += self.Kw_ls[j, i][ls] * (1j * nx) * fac
+                    if np.any(fac):
+                        K += self.K_ls[i, j][ls] * fac
+                        wKw_11 += self.wKw_ls[i, j][ls] * (-1 * (nx ** 2)) * fac
+                        Kw_1 += self.Kw_ls[i, j][ls] * (1j * nx) * fac
+                        wK_1 += self.Kw_ls[j, i][ls] * (1j * nx) * fac
                 Fxx += 2. * (ir2(K) * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1))
 
         # 1d fft mehod using only F11
