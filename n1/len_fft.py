@@ -6,7 +6,7 @@ import pyfftw
 
 
 class len_fft:
-    def __init__(self, cls_unl, lminbox=50, lmaxbox=2500):
+    def __init__(self, cls_unl, cpp, lminbox=50, lmaxbox=2500):
         lside = 2. * np.pi / lminbox
         npix = int(2 * lmaxbox / float(lminbox)) + 1
         if npix % 2 == 1: npix += 1
@@ -23,8 +23,8 @@ class len_fft:
         # === precalc of deflection corr fct:
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
-        xipp = np.array([np.fft.irfft2(extcl(self.box.lmaxbox, -cls_unl['pp'])[ls] * ny ** 2),
-                         np.fft.irfft2(extcl(self.box.lmaxbox, -cls_unl['pp'])[ls] * nx * ny)])# 01 or 10
+        xipp = np.array([np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2),
+                         np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny)])# 01 or 10
 
         xipp[0] -= xipp[0, 0, 0]
         xipp[1] -= xipp[1, 0, 0]

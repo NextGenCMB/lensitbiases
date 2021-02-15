@@ -91,7 +91,7 @@ class nhl_fft:
                     X,Y = XY
                     fac = self._X2S(S, X) * self._X2S(T, Y)
                     if np.any(fac):
-                        if S == T: fac *= np.sqrt(2.)# off-diagonal terms come with factor of 2
+                        if S != T: fac *= np.sqrt(2.)# off-diagonal terms come with factor of 2
                         i = X2i[X]; j = X2i[Y]
                         K      +=       self.K_ls  [i, j][ls] * fac
                         wKw_00 +=  -1 * self.wKw_ls[i, j][ls] * ny * ny * fac
@@ -162,11 +162,12 @@ class nhl_fft:
                     i = X2i[X]; j = X2i[Y]
                     fac = self._X2S(S, X) * self._X2S(T, Y) # off-diagonal terms come with factor of 2
                     if np.any(fac):
-                        if S == T: fac *= np.sqrt(2.)
-                        K += self.K_ls[i, j][ls] * fac
+                        if S != T:
+                            fac *= np.sqrt(2.)
+                        K      += self.K_ls  [i, j][ls] * fac
                         wKw_11 += self.wKw_ls[i, j][ls] * (-1 * (nx ** 2)) * fac
-                        Kw_1 += self.Kw_ls[i, j][ls] * (1j * nx) * fac
-                        wK_1 += self.Kw_ls[j, i][ls] * (1j * nx) * fac
+                        Kw_1   += self.Kw_ls [i, j][ls] * (1j * nx) * fac
+                        wK_1   += self.wK_ls [i, j][ls] * (1j * nx) * fac
                 Fxx += (ir2(K) * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1))
 
         # 1d fft method using only F11
