@@ -59,15 +59,14 @@ class nhl_fft:
 
 
     def get_nhl_2d(self, k, _pyfftw=True):
-        """Returns unormalized QE noise for each 2d multipole on the flat-sky box
+        """Returns unormalized QE noise for each and every 2d multipole on the flat-sky box
 
             Note:
-                ON a square-periodic flat-sky box there can be tiny differences of N0(L) for same |L|
+                On a square-periodic flat-sky box there can be tiny differences of N0(L) for same |L|
 
             No attempt is at optimization. see get_nhl method for much faster N0 array calculation
 
         """
-        Fs = np.zeros((3, self.box.shape[0], self.box.shape[1]), dtype=float) # 00, 11 and 01 components
         X2i = {'T': 0, 'E': 1, 'B': 2}
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
@@ -77,34 +76,36 @@ class nhl_fft:
         Ts = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
 
         XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
-        for S in Ss:
-            for T in Ts:
-                K = np.zeros(self.box.rshape, dtype=complex)
+        Fs = np.zeros((3, self.box.shape[0], self.box.shape[1]), dtype=float) # 00, 11 and 01 components
+        for i, S in enumerate(Ss):  # daig and off-diag
+            for T in Ts[i:]:
+                K      = np.zeros(self.box.rshape, dtype=complex)
                 wKw_11 = np.zeros(self.box.rshape, dtype=complex)
                 wKw_00 = np.zeros(self.box.rshape, dtype=complex)
                 wKw_01 = np.zeros(self.box.rshape, dtype=complex)
-                wK_1 = np.zeros(self.box.rshape, dtype=complex)
-                Kw_1 = np.zeros(self.box.rshape, dtype=complex)
-                wK_0 = np.zeros(self.box.rshape, dtype=complex)
-                Kw_0 = np.zeros(self.box.rshape, dtype=complex)
-                for XY in XYs:  # TT, TE, ET, EE, BB
+                wK_1   = np.zeros(self.box.rshape, dtype=complex)
+                Kw_1   = np.zeros(self.box.rshape, dtype=complex)
+                wK_0   = np.zeros(self.box.rshape, dtype=complex)
+                Kw_0   = np.zeros(self.box.rshape, dtype=complex)
+                for XY in XYs:  # TT, TE, ET, EE, BB for MV or SQE
                     X,Y = XY
                     fac = self._X2S(S, X) * self._X2S(T, Y)
                     if np.any(fac):
-                        i = X2i[X];j = X2i[Y]
+                        if S == T: fac *= np.sqrt(2.)# off-diagonal terms come with factor of 2
+                        i = X2i[X]; j = X2i[Y]
                         K      +=       self.K_ls  [i, j][ls] * fac
                         wKw_00 +=  -1 * self.wKw_ls[i, j][ls] * ny * ny * fac
                         wKw_11 +=  -1 * self.wKw_ls[i, j][ls] * nx * nx * fac
                         wKw_01 +=  -1 * self.wKw_ls[i, j][ls] * nx * ny * fac
 
-                        Kw_0   += 1j * self.Kw_ls [i, j][ls] * ny * fac
-                        Kw_1   += 1j * self.Kw_ls [i, j][ls] * nx * fac
-                        wK_0   +=  1j * self.Kw_ls [j, i][ls] * ny * fac
-                        wK_1   +=  1j * self.Kw_ls [j, i][ls] * nx * fac
-
-                Fs[0] +=     ir2(K)  * ir2(wKw_00) + ir2(Kw_0) * ir2(wK_0)
-                Fs[1] +=     ir2(K)  * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1)
-                Fs[2] +=     ir2(K)  * ir2(wKw_01) + ir2(Kw_0) * ir2(wK_1)
+                        Kw_0   +=  1j * self.Kw_ls [i, j][ls] * ny * fac
+                        Kw_1   +=  1j * self.Kw_ls [i, j][ls] * nx * fac
+                        wK_0   +=  1j * self.wK_ls [i, j][ls] * ny * fac
+                        wK_1   +=  1j * self.wK_ls [i, j][ls] * nx * fac
+                ir2K = ir2(K)
+                Fs[0] +=     ir2K  * ir2(wKw_00) + ir2(Kw_0) * ir2(wK_0)
+                Fs[1] +=     ir2K  * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1)
+                Fs[2] +=     ir2K  * ir2(wKw_01) + ir2(Kw_0) * ir2(wK_1)
         Fyy, Fxx, Fxy = np.fft.rfft2(Fs).real
         n0_2d_gg = ny ** 2 * Fyy + nx ** 2 * Fxx + 2 * nx * ny * Fxy    # lensing gradient
         n0_2d_cc = nx ** 2 * Fyy + ny ** 2 * Fxx - 2 * nx * ny * Fxy    # lensing curl
@@ -122,7 +123,7 @@ class nhl_fft:
             Note:
 
                 Depending on the weight and filtered CMB spectra given as input to the instance the output
-                can be made to to match the 'GMV' or 'SQE' estimator
+                matches the 'GMV' or 'SQE' estimator
 
             Note:
 
@@ -151,39 +152,24 @@ class nhl_fft:
         XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
 
-        for S, T in zip(Ss, Ts):  # diag
-            K = np.zeros(self.box.rshape, dtype=complex)
-            wKw_11 = np.zeros(self.box.rshape, dtype=complex)
-            wK_1 = np.zeros(self.box.rshape, dtype=complex)
-            Kw_1 = np.zeros(self.box.rshape, dtype=complex)
-            for X, Y in XYs:
-                i = X2i[X]; j = X2i[Y]
-                fac = self._X2S(S, X) * self._X2S(T, Y)
-                if np.any(fac):
-                    K      +=  self.K_ls  [i, j][ls] * fac
-                    wKw_11 +=  self.wKw_ls[i, j][ls] * (-1 * (nx ** 2)) * fac
-                    Kw_1   +=  self.Kw_ls [i, j][ls] * (1j * nx) * fac
-                    wK_1   +=  self.Kw_ls [j, i][ls] * (1j * nx) * fac
-            Fxx += (ir2(K) * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1))
-
         for i, S in enumerate(Ss):  # off-diag
-            for T in Ts[i + 1:]:
+            for T in Ts[i:]:
                 K = np.zeros(self.box.rshape, dtype=complex)
                 wKw_11 = np.zeros(self.box.rshape, dtype=complex)
                 wK_1 = np.zeros(self.box.rshape, dtype=complex)
                 Kw_1 = np.zeros(self.box.rshape, dtype=complex)
                 for X, Y in XYs:
-                    i = X2i[X]
-                    j = X2i[Y]
-                    fac = self._X2S(S, X) * self._X2S(T, Y)
+                    i = X2i[X]; j = X2i[Y]
+                    fac = self._X2S(S, X) * self._X2S(T, Y) # off-diagonal terms come with factor of 2
                     if np.any(fac):
+                        if S == T: fac *= np.sqrt(2.)
                         K += self.K_ls[i, j][ls] * fac
                         wKw_11 += self.wKw_ls[i, j][ls] * (-1 * (nx ** 2)) * fac
                         Kw_1 += self.Kw_ls[i, j][ls] * (1j * nx) * fac
                         wK_1 += self.Kw_ls[j, i][ls] * (1j * nx) * fac
-                Fxx += 2. * (ir2(K) * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1))
+                Fxx += (ir2(K) * ir2(wKw_11) + ir2(Kw_1) * ir2(wK_1))
 
-        # 1d fft mehod using only F11
+        # 1d fft method using only F11
         n0_gg = self.box.nx_1d ** 2 * np.sum(np.fft.rfft(Fxx, axis=1).real, axis=0)  # lensing gradient n0
         n0_cc = self.box.nx_1d ** 2 * np.sum(np.fft.rfft(Fxx, axis=0).real, axis=1)  # lensing curl n0
         return -self.norm * np.array([n0_gg, n0_cc]), np.abs(self.box.nx_1d) * self.box.lminbox

@@ -31,7 +31,7 @@ class box:
         self.lmaxbox = self.rsqd2l(nx[npix//2] ** 2 + ny[npix//2] ** 2)
 
         self._ellcounts = None
-
+        self._cos2p_sin2p = None
 
     def _get_lcounts(self):
         if self._ellcounts is None:
@@ -63,6 +63,26 @@ class box:
         sin2p = np.zeros(s, dtype=float)
         sin2p[1:] = np.outer(2 * self.ny_1d[1:], self.nx_1d if rfft else self.ny_1d) / k2[1:]
         return cos2p, sin2p
+
+    def X2S(self, S, X, rfft=True):
+        """Matrix element sending X (T, E or B) cmb mode to stokes flat-sky  Stokes S (T, Q or U)
+
+
+        """
+        if S == 'T':  return 1. if X == 'T' else 0.
+        if S == 'Q':
+            if X == 'T': return 0.
+            if self._cos2p_sin2p is None:
+                self._cos2p_sin2p = self.cos2p_sin2p(rfft=rfft)
+            sgn = 1 if X == 'E' else -1
+            return sgn * self._cos2p_sin2p[0 if X == 'E' else 1]
+        if S == 'U':
+            if X == 'T': return 0.
+            if self._cos2p_sin2p is None:
+                self._cos2p_sin2p = self.cos2p_sin2p(rfft=rfft)
+            return self._cos2p_sin2p[1 if X == 'E' else 0]
+        assert 0
+
 
     def mode_counts(self):
         """Mode number counts on the flat-sky patch.
