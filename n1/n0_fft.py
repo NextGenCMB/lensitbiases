@@ -5,7 +5,7 @@ from n1.box import box
 import pyfftw
 
 
-class n0_fft:
+class nhl_fft:
     def __init__(self, cls_ivfs, cls_w, lminbox=50, lmaxbox=2500):
         lside = 2. * np.pi / lminbox
         npix = int(2 * lmaxbox / float(lminbox)) + 1
@@ -58,13 +58,13 @@ class n0_fft:
         assert 0
 
 
-    def get_n0_2d(self, k, _pyfftw=True):
+    def get_nhl_2d(self, k, _pyfftw=True):
         """Returns unormalized QE noise for each 2d multipole on the flat-sky box
 
             Note:
                 ON a square-periodic flat-sky box there can be tiny differences of N0(L) for same |L|
 
-            No attempt is at optimization. see get_n0 method for much faster N0 array calculation
+            No attempt is at optimization. see get_nhl method for much faster N0 array calculation
 
         """
         Fs = np.zeros((3, self.box.shape[0], self.box.shape[1]), dtype=float) # 00, 11 and 01 components
@@ -111,7 +111,7 @@ class n0_fft:
 
         return - self.norm * np.array([n0_2d_gg, n0_2d_cc])
 
-    def get_n0(self, k, _pyfftw=True):
+    def get_nhl(self, k, _pyfftw=True):
         """Returns unormalized-QE noise for multipole along an axis of the box
 
             Args:
