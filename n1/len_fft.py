@@ -138,15 +138,13 @@ class len_fft:
         lencls_1, specs = self._build_lenmunl_2d(job=job, der_axis=1)
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         r2 = ny ** 2 + nx ** 2
+        r2[0, 0] = 1. # to avoid dividing by zero
         X2i = {'T': 0, 'E': 1, 'B': 2}
         ls = self.box.ls()
         ret = dict()
         for spec in specs:
             X, Y = spec.upper()
-            corr = (lencls_0[spec] * ny + lencls_1[spec] * nx)
-            corr[0, 1:] /= r2[0, 1:]
-            corr[1:] /= r2[1:]
-            ret[spec] = self.cunl_ls[X2i[X], X2i[Y]][ls]  + corr
+            ret[spec] = self.cunl_ls[X2i[X], X2i[Y]][ls]  + (lencls_0[spec] * ny + lencls_1[spec] * nx) / r2
         return ret
 
 
