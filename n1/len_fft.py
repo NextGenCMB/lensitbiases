@@ -1,8 +1,13 @@
+r"""This module contains rfft methods for calculation of lensed spectra and grad-spectra
+
+
+"""
 import os
 import numpy as np
 from n1.utils_n1 import extcl, cls_dot
 from n1.box import box
 import pyfftw
+from scipy.special import factorial
 
 
 class len_fft:
@@ -11,11 +16,10 @@ class len_fft:
         npix = int(2 * lmaxbox / float(lminbox)) + 1
         if npix % 2 == 1: npix += 1
 
-        # ===== instance with 2D flat-sky box info
+        # === instance with 2D flat-sky box info
         self.box = box(lside, npix)
         self.shape = self.box.shape
 
-        # ==== Builds required spectra:
         # === Filter and cls array needed later on:
         cls_unl = {k: extcl(self.box.lmaxbox + lminbox, cls_unl[k]) for k in cls_unl.keys()}  # filtered maps spectra
 
@@ -38,82 +42,96 @@ class len_fft:
         outp = pyfftw.empty_aligned(self.box.shape, dtype='float64')
         inpt = pyfftw.empty_aligned(self.box.rshape, dtype='complex128')
         ifft2 = pyfftw.FFTW(inpt, outp, axes=(0, 1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
-        return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
+        if rm.ndim > 2:
+            assert rm.ndim == 3
+            out = np.empty((len(rm), self.box.shape[0], self.box.shape[1]), dtype=float)
+            for i, r in enumerate(rm):
+                inpt[:] = r
+                ifft2()
+                out[i] = outp
+            return out
+        else:
+            return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
 
 
-    def _build_lenmunl_2d(self, job='TP', _pyfftw=True, der_axis=None):
+    def _build_lenmunl_2d_highorder(self, nmax, job='TP', _pyfftw=True, der_axis=None):
         assert job in ['T', 'P', 'TP']
         assert der_axis in [None, 0, 1], der_axis
+        assert 4>= nmax >= 1, nmax
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
         if job == 'T':
-            Ss = ['T']
-            specs = ['tt']
+            STs = ['TT']
             XYs = ['TT']
-            iSiT2i = {(0, 0):0}
+            specs = ['tt']
         elif job == 'P':
-            Ss = ['Q', 'U']
+            STs =['QQ', 'QU', 'UU']
             specs = ['ee', 'bb']
             XYs = ['EE', 'BB']
-            iSiT2i = {(0, 0):0, (0, 1):1,
-                      (1, 0):1, (1, 1):2}
         elif job == 'TP':
-            Ss = ['T', 'Q', 'U']
+            STs =['TT', 'TQ', 'TU','QQ', 'QU', 'UU']
             specs = ['tt', 'te', 'ee', 'bb']
             XYs = ['TT', 'EE', 'BB', 'TE', 'ET']
-            iSiT2i = {(0, 0):0, (0, 1):1, (0, 2):2,
-                      (1, 0):1, (1, 1):3, (1, 2):4,
-                      (2, 0):2, (2, 1):4, (2, 2):5}
         else:
             assert 0
         X2i = {'T': 0, 'E': 1, 'B': 2}
-        nST = (len(Ss) * (len(Ss) + 1)) // 2
-        ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
+        nyx = np.array(np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij'))
         ls = self.box.ls()
-        lenCST =  np.zeros((nST, self.box.shape[0], self.box.shape[1]), dtype=float)
-        #=== Perturbatively lensed Stokes spectra
-        for iS, S in enumerate(Ss):  # daig and off-diag
-            for jT, T in enumerate(Ss[iS:]):
-                K = np.zeros( (3,self.box.rshape[0], self.box.rshape[1]), dtype=complex) ## 00 11, 01
-                for XY in XYs:  # TT, TE, ET, EE, BB
-                    X,Y = XY
-                    fac = self.box.X2S(S, X) * self.box.X2S(T, Y)
-                    if np.any(fac):
-                        i = X2i[X]; j = X2i[Y]
-                        clST =  self.cunl_ls[i, j][ls] * fac
-                        if der_axis is not None:
-                            clST = clST * (1j * nx if der_axis else 1j * ny)
-                        K[0]  -= clST * ny * ny
-                        K[1]  -= clST * nx * nx
-                        K[2]  -= clST * nx * ny
-                iST = iSiT2i[(iS, jT + iS)]
-                lenCST[iST] +=     ir2(K[0]) * self.xipp_m0[0] + ir2(K[1]) * self.xipp_m0[0].T
-                lenCST[iST] += 2 * ir2(K[2]) * self.xipp_m0[1]
-        lencCST = self.norm * (np.fft.rfft2(lenCST).real if der_axis is None else np.fft.rfft2(lenCST).imag)
+        lenCST = np.zeros((nmax + 1, len(STs), self.box.shape[0], self.box.shape[1]), dtype=float)
+        unlCST = np.zeros((len(STs), self.box.rshape[0], self.box.rshape[1]), dtype=float)
+
+        #=== Builds unlensed Stokes matrices to update later on
+        for iST, ST in enumerate(STs):
+            for XY in XYs:  # === TT, TE, ET, EE, BB at most
+                unlCST[iST] += self.cunl_ls[X2i[XY[0]], X2i[XY[1]]][ls] * self.box.X2S(ST[0], XY[0]) * self.box.X2S(ST[1], XY[1])
+        if der_axis is not None:
+            unlCST = unlCST * (1j * nyx[der_axis])
+        # === Perturbatively lensed Stokes spectra
+        xism = [self.xipp_m0[0], self.xipp_m0[1], self.xipp_m0[0].transpose()]
+        aibi = [(0, 0, 1), (1, 1, 1), (0, 1, 2)]  # axis and mutliplicity count (0 1) same as (1 0)
+        for a1, b1, m1 in aibi * (nmax > 0):
+            f1 = xism[a1 + b1]
+            int1 = -nyx[a1] * nyx[b1]
+            lenCST[0] += m1 * f1 * ir2(unlCST * int1)
+            for a2, b2, m2 in aibi * (nmax > 1):
+                f2 = xism[a2 + b2]
+                int2 = -int1 * nyx[a2] * nyx[b2]
+                lenCST[1] +=  (m1 * m2) * f1 * f2 * ir2(unlCST * int2)
+                for a3, b3, m3 in aibi * (nmax > 2):
+                    f3 = xism[a3 + b3]
+                    int3 = -int2 * nyx[a3] * nyx[b3]
+                    lenCST[2] += (m1 * m2 * m3) * f1 * f2 * f3 * ir2(unlCST * int3)
+                    for a4, b4, m4 in aibi * (nmax > 3):
+                        f4 = xism[a4 + b4]
+                        int4 = -int3 * nyx[a4] * nyx[b4]
+                        lenCST[3] += (m1 * m2 * m3 * m4) * f1 * f2 * f3 * f4 * ir2(unlCST * int4)
+        for n, lenCSTn in enumerate(lenCST): # Index 0 is order 1
+            lenCSTn *= self.norm ** (n + 1) / factorial(n + 1.)  # prefactor for each perturbative order
         #=== Turns lensed Stokes spectra back to T E B:
-        lencls = dict()
+        lenCST_tot = np.fft.rfft2(np.sum(lenCST, axis=0)).real if der_axis is None else np.fft.rfft2(np.sum(lenCST, axis=0)).imag # norm already
+        lencls_tot = dict()
         for spec in specs:
             X, Y = spec.upper()
-            lencls[spec] = np.zeros(self.box.rshape, dtype=float)
-            for iS, S in enumerate(Ss):
-                for iT, T in enumerate(Ss):
-                    lencls[spec] += lencCST[iSiT2i[(iS, iT)]] * self.box.X2S(S, X) * self.box.X2S(T, Y)
-        return lencls, specs
+            lencls_tot[spec] = np.zeros(self.box.rshape, dtype=float)
+            for iST, (S, T) in enumerate(STs):  # daig and off-diag
+                lencls_tot[spec] += lenCST_tot[iST] * self.box.X2S(S, X) * self.box.X2S(T, Y)
+        return lencls_tot, specs
 
 
-    def lensed_cls_2d(self, job='TP'):
+    def lensed_cls_2d(self, job='TP', nmax=1):
         """Returns perturbatively lensed spectra for each and every mode of the 2d flat-sky box
 
             This calculates the lensed-unlensed part perturbatively, adding eventually the original unlensed part
 
             Args:
                 job: 'T', 'P', or 'TP'(default)  for T-only, P-only or calculation of all spectra
+                nmax: perturbative order, defaults to 1 (linear in deflection power)
 
             Returns:
                 dict of 2d map of the lensed spectra, each of the 2d rfft shape
 
 
         """
-        lencls, specs = self._build_lenmunl_2d(job=job)
+        lencls, specs = self._build_lenmunl_2d_highorder(nmax, job=job)
         X2i = {'T': 0, 'E': 1, 'B': 2}
         ls = self.box.ls()
         for spec in specs:
@@ -121,21 +139,22 @@ class len_fft:
             lencls[spec] += self.cunl_ls[X2i[X], X2i[Y]][ls]
         return lencls
 
-    def lensed_gradcls_2d(self, job='TP'):
+    def lensed_gradcls_2d(self, job='TP', nmax=1):
         """Returns perturbatively lensed grad-spectra for each and every mode of the 2d flat-sky box
 
             This calculates the lensed-unlensed part perturbatively, adding eventually the original unlensed part
 
             Args:
                 job: 'T', 'P', or 'TP' (default) for T-only, P-only or calculation of all spectra
+                nmax: perturbative order, defaults to 1 (linear in deflection power)
 
             Returns:
                 dict 2d map of the lensed grad-spectra, ech of the 2d rfft shape
 
 
         """
-        lencls_0, specs = self._build_lenmunl_2d(job=job, der_axis=0)
-        lencls_1, specs = self._build_lenmunl_2d(job=job, der_axis=1)
+        lencls_0, specs = self._build_lenmunl_2d_highorder(nmax, job=job, der_axis=0)
+        lencls_1, specs = self._build_lenmunl_2d_highorder(nmax, job=job, der_axis=1)
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         k2 = ny ** 2 + nx ** 2
         k2[0, 0] = 1. # to avoid dividing by zero

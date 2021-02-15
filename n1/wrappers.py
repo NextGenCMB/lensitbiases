@@ -55,7 +55,7 @@ class cmbconf:
     def get_N0(self):
         pass
 
-    def get_N0_iterative(self, itermax, lminbox=14, lmaxbox=7160):
+    def get_N0_iterative_2d(self, itermax, lminbox=14, lmaxbox=7160):
         print("*** Warning:: Using perturbative lensed Cls and weights on full 2d-boxes, and weights equal to lensed Cls")
         assert self.k in ['p_p', 'p', 'ptt'], self.k
         assert itermax >= 0, itermax
@@ -73,6 +73,7 @@ class cmbconf:
             ivfs_cls, fals = get_ivf_cls(cls_plen, cls_plen, self.lmin, self.lmax, self.nlevt, self.nlevp,  self.nlevt, self.nlevp, self.transf,
                                          jt_tp=self.jt_TP)
             cls_w = {k: np.copy(cls_plen[k]) for k in cls_plen.keys()}
+            cls_f = cls_w
             if self.k == 'ptt':
                 fals['ee'] *= 0.
                 fals['bb'] *= 0.
@@ -85,12 +86,9 @@ class cmbconf:
             if self.k in ['ptt', 'p_p']:
                 cls_w['te'] *= 0.
             nhllib = n0_fft.nhl_fft(ivfs_cls, cls_w,  lminbox=lminbox, lmaxbox=lmaxbox)
-            #NB: could use 1d and spline to get all modes in the box
+            # NB: could possibly use 1d and spline to get all modes in the box
             n_gg, n_cc = nhllib.get_nhl_2d(self.k)
-            if not self.jt_TP: # Response not the same as n0
-                r_gg, r_cc = n0_fft.nhl_fft(fals, cls_w,  lminbox=lminbox, lmaxbox=lmaxbox).get_nhl_2d(self.k)
-            else:
-                r_gg = n_gg
+            r_gg, r_cc = n0_fft.nhl_fft(fals, cls_f,  lminbox=lminbox, lmaxbox=lmaxbox).get_nhl_2d(self.k) # Could try to check when n = r
             N0 =  lib_len.box.sum_in_l(n_gg)  * cli(lib_len.box.mode_counts() * 1.)
             N0 *= cli(  (lib_len.box.sum_in_l(r_gg)  * cli(lib_len.box.mode_counts() * 1.) ) ** 2 )
             N0s.append(N0[:lmax_qlm+1])

@@ -38,25 +38,6 @@ class nhl_fft:
         ifft2 = pyfftw.FFTW(inpt, outp, axes=(0, 1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
         return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
 
-    def _X2S(self, S, X, rfft=True):
-        """Matrix element sending X cmb mode to stokes flat-sky mode S
-
-
-        """
-        if S == 'T':  return 1. if X == 'T' else 0.
-        if S == 'Q':
-            if X == 'T': return 0.
-            if self._cos2p_sin2p is None:
-                self._cos2p_sin2p = self.box.cos2p_sin2p(rfft=rfft)
-            sgn = 1 if X == 'E' else -1
-            return sgn * self._cos2p_sin2p[0 if X == 'E' else 1]
-        if S == 'U':
-            if X == 'T': return 0.
-            if self._cos2p_sin2p is None:
-                self._cos2p_sin2p = self.box.cos2p_sin2p(rfft=rfft)
-            return self._cos2p_sin2p[1 if X == 'E' else 0]
-        assert 0
-
 
     def get_nhl_2d(self, k, _pyfftw=True):
         """Returns unormalized QE noise for each and every 2d multipole on the flat-sky box
@@ -89,7 +70,7 @@ class nhl_fft:
                 Kw_0   = np.zeros(self.box.rshape, dtype=complex)
                 for XY in XYs:  # TT, TE, ET, EE, BB for MV or SQE
                     X,Y = XY
-                    fac = self._X2S(S, X) * self._X2S(T, Y)
+                    fac = self.box.X2S(S, X) * self.box.X2S(T, Y)
                     if np.any(fac):
                         if S != T: fac *= np.sqrt(2.)# off-diagonal terms come with factor of 2
                         i = X2i[X]; j = X2i[Y]
@@ -142,9 +123,7 @@ class nhl_fft:
 
 
         """
-        Fxx = np.zeros(self.box.shape, dtype=float) # 00, 11 and 01 components
-        nx = self.box.nx_1d
-        ls = self.box.ls()
+
 
         X2i = {'T': 0, 'E': 1, 'B': 2}
         Ss =  ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
@@ -152,6 +131,9 @@ class nhl_fft:
         XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
 
+        nx = self.box.nx_1d
+        ls = self.box.ls()
+        Fxx = np.zeros(self.box.shape, dtype=float) # 00, 11 and 01 components
         for i, S in enumerate(Ss):  # off-diag
             for T in Ts[i:]:
                 K = np.zeros(self.box.rshape, dtype=complex)
@@ -160,7 +142,7 @@ class nhl_fft:
                 Kw_1 = np.zeros(self.box.rshape, dtype=complex)
                 for X, Y in XYs:
                     i = X2i[X]; j = X2i[Y]
-                    fac = self._X2S(S, X) * self._X2S(T, Y) # off-diagonal terms come with factor of 2
+                    fac = self.box.X2S(S, X) * self.box.X2S(T, Y) # off-diagonal terms come with factor of 2
                     if np.any(fac):
                         if S != T:
                             fac *= np.sqrt(2.)
