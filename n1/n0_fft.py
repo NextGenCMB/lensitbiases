@@ -33,10 +33,12 @@ class nhl_fft:
         self.norm = norm
 
     def _ifft2(self, rm):
-        outp = pyfftw.empty_aligned(self.box.shape, dtype='float64')
-        inpt = pyfftw.empty_aligned(self.box.rshape, dtype='complex128')
-        ifft2 = pyfftw.FFTW(inpt, outp, axes=(0, 1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
+        oshape = self.box.shape if rm.ndim == 2 else (rm.shape[0], self.box.shape[0], self.box.shape[1])
+        inpt = pyfftw.empty_aligned(rm.shape, dtype='complex128')
+        outp = pyfftw.empty_aligned(oshape, dtype='float64')
+        ifft2 = pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
         return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
+
 
 
     def get_nhl_2d(self, k, _pyfftw=True):

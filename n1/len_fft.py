@@ -39,19 +39,11 @@ class len_fft:
         self.norm = norm
 
     def _ifft2(self, rm):
-        outp = pyfftw.empty_aligned(self.box.shape, dtype='float64')
-        inpt = pyfftw.empty_aligned(self.box.rshape, dtype='complex128')
-        ifft2 = pyfftw.FFTW(inpt, outp, axes=(0, 1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
-        if rm.ndim > 2:
-            assert rm.ndim == 3
-            out = np.empty((len(rm), self.box.shape[0], self.box.shape[1]), dtype=float)
-            for i, r in enumerate(rm):
-                inpt[:] = r
-                ifft2()
-                out[i] = outp
-            return out
-        else:
-            return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
+        oshape = self.box.shape if rm.ndim == 2 else (rm.shape[0], self.box.shape[0], self.box.shape[1])
+        inpt = pyfftw.empty_aligned(rm.shape, dtype='complex128')
+        outp = pyfftw.empty_aligned(oshape, dtype='float64')
+        ifft2 = pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
+        return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
 
 
     def _build_lenmunl_2d_highorder(self, nmax, job='TP', _pyfftw=True, der_axis=None):
@@ -87,7 +79,7 @@ class len_fft:
             unlCST = unlCST * (1j * nyx[der_axis])
         # === Perturbatively lensed Stokes spectra
         xism = [self.xipp_m0[0], self.xipp_m0[1], self.xipp_m0[0].transpose()]
-        aibi = [(0, 0, 1), (1, 1, 1), (0, 1, 2)]  # axis and mutliplicity count (0 1) same as (1 0)
+        aibi = [(0, 0, 1), (1, 1, 1), (0, 1, 2)]  # axis and mutliplicity count; (0 1) same as (1 0)
         for a1, b1, m1 in aibi * (nmax > 0):
             f1 = xism[a1 + b1]
             int1 = -nyx[a1] * nyx[b1]
