@@ -137,7 +137,7 @@ class n1_fft:
         # :always 2 powers in xi_ab, 4 powers of ik_x or ik_y in XY and IJ weights, and two add. powers matching xi_ab's from the responses
         self.norm = norm
 
-    def _ifft2(self, rm):
+    def _irfft2(self, rm):
         oshape = self.box.shape if rm.ndim == 2 else (rm.shape[0], self.box.shape[0], self.box.shape[1])
         inpt = pyfftw.empty_aligned(rm.shape, dtype='complex128')
         outp = pyfftw.empty_aligned(oshape, dtype='float64')

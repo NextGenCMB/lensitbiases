@@ -1,4 +1,4 @@
-r"""Module handling the flat-sky mode structure
+r"""Module handling a 2D flat-sky mode structure
 
 
 """

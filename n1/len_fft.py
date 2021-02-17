@@ -27,8 +27,8 @@ class len_fft:
         # === precalc of deflection corr fct:
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
-        xipp = np.array([np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2),
-                         np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny)])# 01 or 10
+        xipp = np.array([self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2),
+                         self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny)])# 01 or 10
 
         xipp[0] -= xipp[0, 0, 0]
         xipp[1] -= xipp[1, 0, 0]
@@ -49,7 +49,7 @@ class len_fft:
     def _build_lenmunl_2d_highorder(self, nmax, job='TP', _pyfftw=True, der_axis=None):
         assert job in ['T', 'P', 'TP']
         assert der_axis in [None, 0, 1], der_axis
-        assert 4>= nmax >= 1, nmax
+        assert 4 >= nmax >= 1, nmax
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
         if job == 'T':
             STs = ['TT']
@@ -105,7 +105,9 @@ class len_fft:
             X, Y = spec.upper()
             lencls_tot[spec] = np.zeros(self.box.rshape, dtype=float)
             for iST, (S, T) in enumerate(STs):  # daig and off-diag
-                lencls_tot[spec] += lenCST_tot[iST] * self.box.X2S(S, X) * self.box.X2S(T, Y)
+                fac = (1 + (S != T)) *  self.box.X2S(S, X) * self.box.X2S(T, Y)
+                if np.any(fac):
+                    lencls_tot[spec] += lenCST_tot[iST] * fac
         return lencls_tot, specs
 
 

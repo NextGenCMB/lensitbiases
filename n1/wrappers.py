@@ -109,6 +109,10 @@ class cmbconf:
         lib = n1_fft.n1_fft(self.fals, self.cls_w, self.cls_f, self.cls_unl['pp'], lminbox=lminbox, lmaxbox=lmaxbox)
         return np.array([lib.get_n1(self.k, L, do_n1mat=False) for L in Ls])
 
-    def get_response(self):
-        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=14, lmaxbox=7160)
+    def get_response(self, lminbox=14, lmaxbox=7160):
+        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=lminbox, lmaxbox=lmaxbox)
         return lib.get_nhl(self.k)
+
+    def get_response_2d(self, lminbox=14, lmaxbox=7160):
+        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=lminbox, lmaxbox=lmaxbox)
+        return lib.get_nhl_2d(self.k)
