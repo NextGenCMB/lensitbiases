@@ -7,7 +7,6 @@ import numpy as np
 from n1.utils_n1 import extcl, cls_dot
 from n1.box import box
 import pyfftw
-from scipy.special import factorial
 
 
 class len_fft:
@@ -96,8 +95,9 @@ class len_fft:
                         f4 = xism[a4 + b4]
                         int4 = -int3 * nyx[a4] * nyx[b4]
                         lenCST[3] += (m1 * m2 * m3 * m4) * f1 * f2 * f3 * f4 * ir2(unlCST * int4)
+        factorial = [1, 1, 2, 6, 24, 120, 720]
         for n, lenCSTn in enumerate(lenCST): # Index 0 is order 1
-            lenCSTn *= self.norm ** (n + 1) / factorial(n + 1.)  # prefactor for each perturbative order
+            lenCSTn *= self.norm ** (n + 1) / factorial[n + 1]  # prefactor for each perturbative order
         #=== Turns lensed Stokes spectra back to T E B:
         lenCST_tot = np.fft.rfft2(np.sum(lenCST, axis=0)).real if der_axis is None else np.fft.rfft2(np.sum(lenCST, axis=0)).imag # norm already
         lencls_tot = dict()
