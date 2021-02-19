@@ -48,7 +48,7 @@ class len_fft:
     def _build_lenmunl_2d_highorder(self, nmax, job='TP', _pyfftw=True, der_axis=None):
         assert job in ['T', 'P', 'TP']
         assert der_axis in [None, 0, 1], der_axis
-        assert 4 >= nmax >= 1, nmax
+        assert 3 >= nmax >= 1, (nmax, 'higher orders not really tested and unnecessary')
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
         if job == 'T':
             STs = ['TT']
@@ -65,15 +65,15 @@ class len_fft:
         else:
             assert 0
         X2i = {'T': 0, 'E': 1, 'B': 2}
-        nyx = np.array(np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij'))
-        ls = self.box.ls()
         lenCST = np.zeros((nmax + 1, len(STs), self.box.shape[0], self.box.shape[1]), dtype=float)
         unlCST = np.zeros((len(STs), self.box.rshape[0], self.box.rshape[1]), dtype=float)
 
         #=== Builds unlensed Stokes matrices to update later on
+        ls = self.box.ls()
         for iST, ST in enumerate(STs):
             for XY in XYs:  # === TT, TE, ET, EE, BB at most
                 unlCST[iST] += self.cunl_ls[X2i[XY[0]], X2i[XY[1]]][ls] * self.box.X2S(ST[0], XY[0]) * self.box.X2S(ST[1], XY[1])
+        nyx = np.array(np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij'))
         if der_axis is not None:
             unlCST = unlCST * (1j * nyx[der_axis])
         # === Perturbatively lensed Stokes spectra
