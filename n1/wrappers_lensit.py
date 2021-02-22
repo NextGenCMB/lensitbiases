@@ -40,6 +40,8 @@ class cmbconf:
             fals['tt'] *= 0.
             ivfs_cls['tt'] *= 0.
             ivfs_cls['te'] *= 0.
+            if 'te' in fals.keys():
+                fals['te'] *= 0.
         if k in ['ptt', 'p_p']:
             cls_qeweight['te'] *= 0.
 
@@ -58,8 +60,13 @@ class cmbconf:
     def get_N0(self):
         pass
 
-    def get_N0_iterative_2d(self, itermax,lminbox=14.179630807244129, lmaxbox=7258):
-        print("*** Warning:: Using perturbative lensed Cls and weights on full 2d-boxes, and weights equal to lensed Cls")
+    def get_N0_iterative_2d(self, itermax, nmax, lminbox=14.179630807244129, lmaxbox=7258, f_is_len=False):
+        if not f_is_len:
+            print("*** Warning:: Using order %s perturbative lensed Cls and weights on full 2d-boxes, "
+                  " and order %s perturbative responses gradien Cls"%(nmax, nmax))
+        else:
+            print("*** Warning:: Using order %s perturbative lensed Cls and weights on full 2d-boxes, "
+                  " and taking response Cls same as weight same as lensed Cls"%(nmax))
         assert self.k in ['p_p', 'p', 'ptt'], self.k
         assert itermax >= 0, itermax
         lmax_qlm = 2 * self.lmax
@@ -70,13 +77,18 @@ class cmbconf:
             clwf = 0. if it == 0 else cpp[:lmax_qlm + 1] * cli(cpp[:lmax_qlm + 1] + N0[:lmax_qlm + 1])
             cpp[:lmax_qlm + 1] *= (1. - clwf)
             lib_len = len_fft.len_fft(self.cls_unl, cpp, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
-            cls_plen_2d =  lib_len.lensed_cls_2d()
+            cls_plen_2d =  lib_len.lensed_cls_2d(nmax=nmax)
             # bin it
             cls_plen = {k: lib_len.box.sum_in_l(cls_plen_2d[k]) * cli(lib_len.box.mode_counts() * 1.) for k in cls_plen_2d.keys()}
             ivfs_cls, fals = get_ivf_cls(cls_plen, cls_plen, self.lmin, self.lmax, self.nlevt, self.nlevp,  self.nlevt, self.nlevp, self.transf,
                                          jt_tp=self.jt_TP)
-            cls_w = {k: np.copy(cls_plen[k]) for k in cls_plen.keys()}
-            cls_f = cls_w
+            if not f_is_len:
+                cls_f_2d = lib_len.lensed_gradcls_2d(nmax=nmax) # response cls
+                cls_f = {k: lib_len.box.sum_in_l(cls_f_2d[k]) * cli(lib_len.box.mode_counts() * 1.) for k in cls_f_2d.keys()}
+                cls_w = cls_f
+            else:
+                cls_w = cls_plen
+                cls_f = cls_plen
             if self.k == 'ptt':
                 fals['ee'] *= 0.
                 fals['bb'] *= 0.
