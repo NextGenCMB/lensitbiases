@@ -81,7 +81,7 @@ def get_n1(k, Ls, jt_TP, do_n1mat=True, lminbox=50, lmaxbox=2500):
 
 
 class n1_fft:
-    def __init__(self, fals, cls_w, cls_f, cpp, lminbox=50, lmaxbox=2500):
+    def __init__(self, fals, cls_w, cls_f, cpp, lminbox=50, lmaxbox=2500, k2l=None):
         r""" N1 calculator main module
 
             Args:
@@ -100,7 +100,7 @@ class n1_fft:
         if npix % 2 == 1: npix += 1
 
         #===== instance with 2D flat-sky box info
-        self.box = box(lside, npix)
+        self.box = box(lside, npix, k2l=k2l)
         self.shape = self.box.shape
 
 

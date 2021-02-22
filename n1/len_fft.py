@@ -10,17 +10,17 @@ import pyfftw
 
 
 class len_fft:
-    def __init__(self, cls_unl, cpp, lminbox=50, lmaxbox=2500):
+    def __init__(self, cls_unl, cpp, lminbox=50, lmaxbox=2500, k2l=None):
         lside = 2. * np.pi / lminbox
         npix = int(2 * lmaxbox / float(lminbox)) + 1
         if npix % 2 == 1: npix += 1
 
         # === instance with 2D flat-sky box info
-        self.box = box(lside, npix)
+        self.box = box(lside, npix, k2l=k2l)
         self.shape = self.box.shape
 
         # === Filter and cls array needed later on:
-        cls_unl = {k: extcl(self.box.lmaxbox + lminbox, cls_unl[k]) for k in cls_unl.keys()}  # filtered maps spectra
+        cls_unl = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_unl[k]) for k in cls_unl.keys()}  # filtered maps spectra
 
         self.cunl_ls   = cls_dot([cls_unl])
         # === precalc of deflection corr fct:

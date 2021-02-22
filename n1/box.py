@@ -7,10 +7,10 @@ from n1.utils_box import freqs, rfft2_reals
 from n1.utils_n1 import cli
 
 class box:
-    def __init__(self, lside, npix):
+    def __init__(self, lside, npix, k2l=None):
         assert npix % 2 == 0, npix
 
-        shape = (npix, npix)
+        shape  = (npix, npix)
         rshape = (npix, npix // 2 + 1)
 
         # === frequencies
@@ -26,12 +26,16 @@ class box:
         self.rshape = rshape
         self.lsides = (lside, lside)
 
+        # 2d frequency to multipole scheme
+        self.k2l = k2l
+
         # mini and maxi multipole in box
-        self.lminbox = self.rsqd2l(1.)
+        self.lminbox = 2 * np.pi / lside # This is used for normalizations etc
         self.lmaxbox = self.rsqd2l(nx[npix//2] ** 2 + ny[npix//2] ** 2)
 
         self._ellcounts = None
         self._cos2p_sin2p = None
+
 
     def _get_lcounts(self):
         if self._ellcounts is None:
@@ -45,7 +49,13 @@ class box:
         return self._ellcounts
 
     def rsqd2l(self, r2):
-        return np.int_(np.round((2. * np.pi / self.lsides[0]) * (np.sqrt(r2))))
+        if self.k2l is None: # default
+            return np.int_(np.round((2. * np.pi / self.lsides[0]) * np.sqrt(r2)))
+        elif self.k2l in ['lensit']:
+            k = (2. * np.pi / self.lsides[0]) * np.sqrt(r2)
+            return np.uint16(np.round(k - 0.5) + 0.5 * ((k - 0.5) < 0))
+        else:
+            assert 0, self.k2l + ' not implemented'
 
     def ls(self, rfft=True):
         n2y, n2x = np.meshgrid(self.ny_1d ** 2, (self.nx_1d if rfft else self.ny_1d) ** 2, indexing='ij')

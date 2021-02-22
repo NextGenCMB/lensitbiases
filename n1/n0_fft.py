@@ -6,19 +6,19 @@ import pyfftw
 
 
 class nhl_fft:
-    def __init__(self, cls_ivfs, cls_w, lminbox=50, lmaxbox=2500):
+    def __init__(self, cls_ivfs, cls_w, lminbox=50, lmaxbox=2500, k2l=None):
         lside = 2. * np.pi / lminbox
         npix = int(2 * lmaxbox / float(lminbox)) + 1
         if npix % 2 == 1: npix += 1
 
         # ===== instance with 2D flat-sky box info
-        self.box = box(lside, npix)
+        self.box = box(lside, npix, k2l=k2l)
         self.shape = self.box.shape
 
-        # ==== Builds required spectra:
         # === Filter and cls array needed later on:
-        cls_ivfs = {k: extcl(self.box.lmaxbox + lminbox, cls_ivfs[k]) for k in cls_ivfs.keys()}  # filtered maps spectra
-        cls_w = {k: extcl(self.box.lmaxbox + lminbox, cls_w[k]) for k in cls_w.keys()}  # estimator weights spectra
+
+        cls_ivfs = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_ivfs[k]) for k in cls_ivfs.keys()}  # filtered maps spectra
+        cls_w = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_w[k]) for k in cls_w.keys()}  # estimator weights spectra
 
         self.K_ls   = cls_dot([cls_ivfs])
         self.Kw_ls  = cls_dot([cls_ivfs, cls_w])

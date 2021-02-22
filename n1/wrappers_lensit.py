@@ -1,11 +1,12 @@
 import os
 import numpy as np
 import n1
-from n1.utils_n1 import camb_clfile, get_ivf_cls, cli, dls2cls,cls2dls, enumerate_progress
+from n1.utils_n1 import camb_clfile, get_ivf_cls, cli, enumerate_progress
 from n1 import n1_fft, n0_fft, len_fft
 from scipy.interpolate import UnivariateSpline as spl
-default_cls= os.path.join(os.path.abspath(os.path.dirname(n1.__file__)), 'data', 'cls', 'FFP10_wdipole_')
+import lensit as li
 
+default_cls= os.path.join(os.path.dirname(os.path.abspath(os.path.dirname(li.__file__))), 'inputs', 'cls', 'fiducial_flatsky_')
 
 class cmbconf:
     def __init__(self, k, jt_TP, nlevt, nlevp, transf, lmin, lmax,
@@ -52,10 +53,12 @@ class cmbconf:
         self.k = k
         self.jt_TP = jt_TP
 
+        self.k2l = 'lensit'
+
     def get_N0(self):
         pass
 
-    def get_N0_iterative_2d(self, itermax, lminbox=14, lmaxbox=7160):
+    def get_N0_iterative_2d(self, itermax,lminbox=14.179630807244129, lmaxbox=7258):
         print("*** Warning:: Using perturbative lensed Cls and weights on full 2d-boxes, and weights equal to lensed Cls")
         assert self.k in ['p_p', 'p', 'ptt'], self.k
         assert itermax >= 0, itermax
@@ -66,7 +69,7 @@ class cmbconf:
             cpp = np.copy(self.cls_unl['pp'])
             clwf = 0. if it == 0 else cpp[:lmax_qlm + 1] * cli(cpp[:lmax_qlm + 1] + N0[:lmax_qlm + 1])
             cpp[:lmax_qlm + 1] *= (1. - clwf)
-            lib_len = len_fft.len_fft(self.cls_unl, cpp, lminbox=lminbox, lmaxbox=lmaxbox)
+            lib_len = len_fft.len_fft(self.cls_unl, cpp, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
             cls_plen_2d =  lib_len.lensed_cls_2d()
             # bin it
             cls_plen = {k: lib_len.box.sum_in_l(cls_plen_2d[k]) * cli(lib_len.box.mode_counts() * 1.) for k in cls_plen_2d.keys()}
@@ -85,10 +88,10 @@ class cmbconf:
                 ivfs_cls['te'] *= 0.
             if self.k in ['ptt', 'p_p']:
                 cls_w['te'] *= 0.
-            nhllib = n0_fft.nhl_fft(ivfs_cls, cls_w,  lminbox=lminbox, lmaxbox=lmaxbox)
+            nhllib = n0_fft.nhl_fft(ivfs_cls, cls_w,  lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
             # NB: could possibly use 1d and spline to get all modes in the box
             n_gg, n_cc = nhllib.get_nhl_2d(self.k)
-            r_gg, r_cc = n0_fft.nhl_fft(fals, cls_f,  lminbox=lminbox, lmaxbox=lmaxbox).get_nhl_2d(self.k) # Could try to check when n = r
+            r_gg, r_cc = n0_fft.nhl_fft(fals, cls_f,  lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l).get_nhl_2d(self.k) # Could try to check when n = r
             N0 =  lib_len.box.sum_in_l(n_gg)  * cli(lib_len.box.mode_counts() * 1.)
             N0 *= cli(  (lib_len.box.sum_in_l(r_gg)  * cli(lib_len.box.mode_counts() * 1.) ) ** 2 )
             N0s.append(N0[:lmax_qlm+1])
@@ -101,18 +104,18 @@ class cmbconf:
         n1s /= (spl(ls * 1., Rgg, k=2, s=0, ext='zeros')(Ls * 1.)) ** 2
         return n1s
 
-    def get_n0(self):
-        lib = n0_fft.nhl_fft(self.ivfs_cls, self.cls_w, lminbox=14, lmaxbox=7160)
+    def get_n0(self, lminbox=14.179630807244129, lmaxbox=7258):
+        lib = n0_fft.nhl_fft(self.ivfs_cls, self.cls_w, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
         return lib.get_nhl(self.k)
 
     def get_n1(self, Ls, lminbox=50, lmaxbox=2500):
-        lib = n1_fft.n1_fft(self.fals, self.cls_w, self.cls_f, self.cls_unl['pp'], lminbox=lminbox, lmaxbox=lmaxbox)
+        lib = n1_fft.n1_fft(self.fals, self.cls_w, self.cls_f, self.cls_unl['pp'], lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
         return np.array([lib.get_n1(self.k, L, do_n1mat=False) for L in Ls])
 
-    def get_response(self, lminbox=14, lmaxbox=7160):
-        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=lminbox, lmaxbox=lmaxbox)
+    def get_response(self, lminbox=14.179630807244129, lmaxbox=7258):
+        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
         return lib.get_nhl(self.k)
 
-    def get_response_2d(self, lminbox=14, lmaxbox=7160):
-        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=lminbox, lmaxbox=lmaxbox)
+    def get_response_2d(self, lminbox=14.179630807244129, lmaxbox=7258):
+        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
         return lib.get_nhl_2d(self.k)
