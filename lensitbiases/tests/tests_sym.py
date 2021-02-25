@@ -1,6 +1,6 @@
 import numpy as np
-from n1.utils_n1 import prepare_cls
-from n1.n1_fft import n1_fft
+from lensitbiases.utils_n1 import prepare_cls
+from lensitbiases.n1_fft import n1_fft
 
 
 def test_transpose(k, L):
@@ -100,7 +100,7 @@ def test_symmetries():
         - W_{-L}^{ST} = W_{+L}^{TS} for all T, S and all weights (because of changing l sign is same as swapping l1 and l2)
         - W_{-L}^{ST, (0, 1)} = (-1) W_{+L}^{TS, (1, 0)} for all T, S and MV weights
     """
-    from n1 import _n1_ptt, utils_n1
+    from lensitbiases import _n1_ptt, utils_n1
     import os
     from plancklens import utils
 

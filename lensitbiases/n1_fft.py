@@ -20,8 +20,8 @@ r"""rFFT N1 and N1 matrix main module
 
 """
 import numpy as np
-from n1.utils_n1 import extcl, cls_dot, prepare_cls
-from n1.box import box
+from lensitbiases.utils_n1 import extcl, cls_dot, prepare_cls
+from lensitbiases.box import box
 import os
 import pyfftw
 

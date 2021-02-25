@@ -1,7 +1,7 @@
 import os
 import numpy as np
-from n1.utils_n1 import extcl, cls_dot
-from n1.box import box
+from lensitbiases.utils_n1 import extcl, cls_dot
+from lensitbiases.box import box
 import pyfftw
 
 

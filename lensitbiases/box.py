@@ -3,8 +3,8 @@ r"""Module handling a 2D flat-sky mode structure
 
 """
 import numpy as np
-from n1.utils_box import freqs, rfft2_reals
-from n1.utils_n1 import cli
+from lensitbiases.utils_box import freqs, rfft2_reals
+from lensitbiases.utils_n1 import cli
 
 class box:
     def __init__(self, lside, npix, k2l=None):

@@ -1,10 +1,10 @@
 import sys, os
 import numpy as np
-import n1
+import lensitbiases
 import time
 
 def prepare_cls(k, jt_TP=False):
-    path =  os.path.join(os.path.abspath(os.path.dirname(n1.__file__)),'data', 'cls')
+    path =  os.path.join(os.path.abspath(os.path.dirname(lensitbiases.__file__)), 'data', 'cls')
     cls_grad = camb_clfile(os.path.join(path, 'FFP10_wdipole_gradlensedCls.dat'))
     cls_unl = camb_clfile(os.path.join(path, 'FFP10_wdipole_lenspotentialCls.dat'))
     cls_weights = camb_clfile(os.path.join(path, 'FFP10_wdipole_gradlensedCls.dat'))
@@ -78,7 +78,7 @@ def get_fal(lmin_ivf=100, lmax_ivf=2048, nlevt=35., nlevp=55., beam=6.5, jt_tp=F
             spectral matrix of the inverse-variance filtered CMB, filtering matrix and lmax_ivf
 
     """
-    path = os.path.abspath(os.path.dirname(n1.__file__))
+    path = os.path.abspath(os.path.dirname(lensitbiases.__file__))
     cls_len = camb_clfile(os.path.join(path, 'data','cls', 'FFP10_wdipole_lensedCls.dat'))
     l = np.arange(lmax_ivf + 1, dtype=int)
     transf = np.exp(-l * (l + 1.) * (beam / 60 / 180 * np.pi/ 2.3548200450309493) ** 2 * 0.5)

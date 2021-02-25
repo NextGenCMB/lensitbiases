@@ -6,8 +6,8 @@
 """
 import numpy as np
 
-from n1.box import box
-from n1.utils_n1 import extcl
+from lensitbiases.box import box
+from lensitbiases.utils_n1 import extcl
 
 
 class n1_ptt:

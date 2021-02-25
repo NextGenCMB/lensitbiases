@@ -11,16 +11,16 @@ def configuration(parent_package='', top_path=''):
     return config
 
 setup(
-    name='n1',
+    name='lensitbiases',
     version='0.0.1',
-    packages=['n1'],
-    url='https://github.com/carronj/n1',
+    packages=['lensitbiases'],
+    url='https://github.com/NextGenCMB/lensitbiases',
     author='Julien Carron',
     author_email='to.jcarron@gmail.com',
-    description='FFT-based lensing and other anisotropies N1 bias calculator',
-    data_files=[('n1/data/cls', ['n1/data/cls/FFP10_wdipole_lensedCls.dat',
-                                         'n1/data/cls/FFP10_wdipole_lenspotentialCls.dat',
-                                         'n1/data/cls/FFP10_wdipole_params.ini'])],
+    description='FFT-based lensing and other anisotropies N1-N0 bias calculator',
+    data_files=[('lensitbiases/data/cls', ['lensitbiases/data/cls/FFP10_wdipole_lensedCls.dat',
+                                         'lensitbiases/data/cls/FFP10_wdipole_lenspotentialCls.dat',
+                                         'lensitbiases/data/cls/FFP10_wdipole_params.ini'])],
     install_requires=['numpy', 'pyfftw'],
     requires=['numpy', 'pyfftw'],
     long_description=long_description,

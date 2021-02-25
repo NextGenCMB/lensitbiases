@@ -1,10 +1,10 @@
 import os
 import numpy as np
-import n1
-from n1.utils_n1 import camb_clfile, get_ivf_cls, cli, enumerate_progress
-from n1 import n1_fft, n0_fft, len_fft
+import lensitbiases
+from lensitbiases.utils_n1 import camb_clfile, get_ivf_cls, cli, enumerate_progress
+from lensitbiases import n1_fft, n0_fft, len_fft
 from scipy.interpolate import UnivariateSpline as spl
-default_cls= os.path.join(os.path.abspath(os.path.dirname(n1.__file__)), 'data', 'cls', 'FFP10_wdipole_')
+default_cls= os.path.join(os.path.abspath(os.path.dirname(lensitbiases.__file__)), 'data', 'cls', 'FFP10_wdipole_')
 
 
 class cmbconf:
