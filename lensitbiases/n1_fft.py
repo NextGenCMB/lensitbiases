@@ -86,8 +86,10 @@ class n1_fft:
 
             Args:
                   fals: dict of inverse-variance filtering cls
-                  cls_w: Quadratic estimator CMB spectra (mapping the inverse-variance filtered maps to the Wiener-filtered CMB)
-                  cls_f: CMB spectra entering the response function of the CMB to lensing (in principle the grad-lensed Cls)
+                  cls_w: Quadratic estimator CMB spectra used in QE(mapping the inverse-variance filtered maps to the Wiener-filtered CMB)
+                        (for optimal QE the grad-lensed Cls, but for practical purposes lensed cls are close to this as well)
+                  cls_f: CMB spectra entering the response function of the CMB to lensing
+                        (in principle always the grad-lensed Cls, but for practical purposes the lensed cls are very close to this as well)
                   lminbox: a 2d flat-sky will be constructed with this as minimum multipole
                   lmaxbox: a 2d flat-sky will be constructed with this as maximum multipole along an axis
 
