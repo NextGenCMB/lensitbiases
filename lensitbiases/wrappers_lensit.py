@@ -60,7 +60,8 @@ class cmbconf:
     def get_N0(self):
         pass
 
-    def get_N0_iterative_2d(self, itermax, nmax, lminbox=14.179630807244129, lmaxbox=7258, f_is_len=False):
+    def get_N0_iterative_2d(self, itermax, nmax, lminbox=14.179630807244129, lmaxbox=7258,
+                            f_is_len=False, wN1inWF=False):
         if not f_is_len:
             print("*** Warning:: Using order %s perturbative lensed Cls and weights on full 2d-boxes, "
                   " and order %s perturbative responses gradien Cls"%(nmax, nmax))
@@ -71,10 +72,11 @@ class cmbconf:
         assert itermax >= 0, itermax
         lmax_qlm = 2 * self.lmax
         N0s = []
-        N0 = np.inf
+        N1s = []
+        N0pN1 = np.inf
         for irr, it in enumerate_progress(range(itermax + 1)):
             cpp = np.copy(self.cls_unl['pp'])
-            clwf = 0. if it == 0 else cpp[:lmax_qlm + 1] * cli(cpp[:lmax_qlm + 1] + N0[:lmax_qlm + 1])
+            clwf = 0. if it == 0 else cpp[:lmax_qlm + 1] * cli(cpp[:lmax_qlm + 1] + N0pN1[:lmax_qlm + 1])
             cpp[:lmax_qlm + 1] *= (1. - clwf)
             lib_len = len_fft.len_fft(self.cls_unl, cpp, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
             cls_plen_2d =  lib_len.lensed_cls_2d(nmax=nmax)
@@ -107,8 +109,28 @@ class cmbconf:
             N0 =  lib_len.box.sum_in_l(n_gg)  * cli(lib_len.box.mode_counts() * 1.)
             N0 *= cli(  (lib_len.box.sum_in_l(r_gg)  * cli(lib_len.box.mode_counts() * 1.) ) ** 2 )
             N0s.append(N0[:lmax_qlm+1])
+            if wN1inWF:
+                # need to spline the cls for the N1 calc:
+                ls, = np.where(lib_len.box.mode_counts()[:self.lmax + 1] > 0)
+                fals_spl  = {k: spl(ls, fals[k][ls], k=2, s=0, ext='zeros')(np.arange(self.lmax + 1) * 1.) for k in fals.keys()}
+                cls_w_spl = {k: spl(ls, cls_w[k][ls], k=2, s=0, ext='zeros')(np.arange(self.lmax + 1) * 1.) for k in cls_w.keys()}
+                cls_f_spl = {k: spl(ls, cls_f[k][ls], k=2, s=0, ext='zeros')(np.arange(self.lmax + 1) * 1.) for k in cls_f.keys()}
+                #This one spline probably not needed
+                cpp_spl = spl(ls, cpp[ls], k=2, s=0, ext='zeros')(np.arange(self.lmax + 1) * 1.)
+
+                libn1 = n1_fft.n1_fft(fals_spl, cls_w_spl, cls_f_spl, cpp_spl, lminbox=lminbox,  lmaxbox=lmaxbox, k2l=self.k2l)
+                Ls = np.linspace(10, lmax_qlm, 50)
+                n1 =  np.array([libn1.get_n1(self.k, L, do_n1mat=False) for L in Ls])
+                n1_spl = spl(Ls, n1, s=0, k=3, ext='zeros')(np.arange(len(N0)) * 1.)
+                N1 = n1_spl * cli(  (lib_len.box.sum_in_l(r_gg)  * cli(lib_len.box.mode_counts() * 1.) ) ** 2 )
+                N1s.append(N1[:lmax_qlm + 1])
+                N0pN1 = N0 + N1
+            else:
+                N0pN1 = N0
             ls, = np.where(lib_len.box.mode_counts()[:lmax_qlm+1])
-        return np.array(N0s), (cls_plen, cpp), ls
+        if not wN1inWF:
+            return np.array(N0s), (cls_plen, cpp), ls
+        return np.array(N0s), np.array(N1s), (cls_plen, cpp), ls
 
     def get_N1(self, Ls, lminbox=50, lmaxbox=2500):
         n1s = self.get_n1(Ls, lminbox=lminbox, lmaxbox=lmaxbox)
@@ -119,6 +141,11 @@ class cmbconf:
     def get_n0(self, lminbox=14.179630807244129, lmaxbox=7258):
         lib = n0_fft.nhl_fft(self.ivfs_cls, self.cls_w, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
         return lib.get_nhl(self.k)
+
+    def get_n0_2d(self, lminbox=14.179630807244129, lmaxbox=7258):
+        lib = n0_fft.nhl_fft(self.ivfs_cls, self.cls_w, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
+        return lib.get_nhl_2d(self.k)
+
 
     def get_n1(self, Ls, lminbox=50, lmaxbox=2500):
         lib = n1_fft.n1_fft(self.fals, self.cls_w, self.cls_f, self.cls_unl['pp'], lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
