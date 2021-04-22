@@ -8,6 +8,8 @@ import lensit as li
 
 default_cls= os.path.join(os.path.dirname(os.path.abspath(os.path.dirname(li.__file__))), 'inputs', 'cls', 'fiducial_flatsky_')
 
+#FIXME: allow response for different cls_w and cls_f!
+
 class cmbconf:
     def __init__(self, k, jt_TP, nlevt, nlevp, transf, lmin, lmax,
                  cls_cmblen=None, cls_cmbresponse=None, cls_cmbfilt=None, cls_qeweight=None, cls_cmblunl=None):
@@ -61,7 +63,7 @@ class cmbconf:
         pass
 
     def get_N0_iterative_2d(self, itermax, nmax, lminbox=14.179630807244129, lmaxbox=7258,
-                            f_is_len=False, wN1inWF=False):
+                            filt_is_unl=False, f_is_len=False, w_is_unl=False, wN1inWF=False):
         if not f_is_len:
             print("*** Warning:: Using order %s perturbative lensed Cls and weights on full 2d-boxes, "
                   " and order %s perturbative responses gradien Cls"%(nmax, nmax))
@@ -82,15 +84,15 @@ class cmbconf:
             cls_plen_2d =  lib_len.lensed_cls_2d(nmax=nmax)
             # bin it
             cls_plen = {k: lib_len.box.sum_in_l(cls_plen_2d[k]) * cli(lib_len.box.mode_counts() * 1.) for k in cls_plen_2d.keys()}
-            ivfs_cls, fals = get_ivf_cls(cls_plen, cls_plen, self.lmin, self.lmax, self.nlevt, self.nlevp,  self.nlevt, self.nlevp, self.transf,
+            cls_filt = cls_plen if not filt_is_unl else self.cls_unl
+            ivfs_cls, fals = get_ivf_cls(cls_plen, cls_filt, self.lmin, self.lmax, self.nlevt, self.nlevp,  self.nlevt, self.nlevp, self.transf,
                                          jt_tp=self.jt_TP)
             if not f_is_len:
                 cls_f_2d = lib_len.lensed_gradcls_2d(nmax=nmax) # response cls
                 cls_f = {k: lib_len.box.sum_in_l(cls_f_2d[k]) * cli(lib_len.box.mode_counts() * 1.) for k in cls_f_2d.keys()}
-                cls_w = cls_f
             else:
-                cls_w = cls_plen
                 cls_f = cls_plen
+            cls_w = cls_f if not w_is_unl else {k:np.copy(self.cls_unl[k]) for k in self.cls_unl.keys()}
             if self.k == 'ptt':
                 fals['ee'] *= 0.
                 fals['bb'] *= 0.
@@ -105,7 +107,7 @@ class cmbconf:
             nhllib = n0_fft.nhl_fft(ivfs_cls, cls_w,  lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
             # NB: could possibly use 1d and spline to get all modes in the box
             n_gg, n_cc = nhllib.get_nhl_2d(self.k)
-            r_gg, r_cc = n0_fft.nhl_fft(fals, cls_f,  lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l).get_nhl_2d(self.k) # Could try to check when n = r
+            r_gg, r_cc = n0_fft.nhl_fft(fals, cls_f,  lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l, cls_w2=cls_w).get_nhl_2d(self.k) # Could try to check when n = r
             N0 =  lib_len.box.sum_in_l(n_gg)  * cli(lib_len.box.mode_counts() * 1.)
             N0 *= cli(  (lib_len.box.sum_in_l(r_gg)  * cli(lib_len.box.mode_counts() * 1.) ) ** 2 )
             N0s.append(N0[:lmax_qlm+1])
@@ -152,9 +154,9 @@ class cmbconf:
         return np.array([lib.get_n1(self.k, L, do_n1mat=False) for L in Ls])
 
     def get_response(self, lminbox=14.179630807244129, lmaxbox=7258):
-        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
+        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l, cls_w2=self.cls_w)
         return lib.get_nhl(self.k)
 
     def get_response_2d(self, lminbox=14.179630807244129, lmaxbox=7258):
-        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l)
+        lib = n0_fft.nhl_fft(self.fals, self.cls_f, lminbox=lminbox, lmaxbox=lmaxbox, k2l=self.k2l, cls_w2=self.cls_w)
         return lib.get_nhl_2d(self.k)
