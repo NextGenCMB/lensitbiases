@@ -31,11 +31,17 @@ class nhl_fft:
         else:
             cls_w2 = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_w2[k]) for k in cls_w2.keys()}  # second estimator weights spectra
 
-        self.K_ls   = cls_dot([cls_ivfs])
-        self.Kw1_ls  = cls_dot([cls_ivfs, cls_w1])
-        self.w2K_ls  = cls_dot([cls_w2, cls_ivfs])
-        self.wKw_sym_ls = 0.5 * (cls_dot([cls_w1, cls_ivfs, cls_w2]) + cls_dot([cls_w2, cls_ivfs, cls_w1]))
+
+        K_ls, Kw1_ls, w2K_ls, wKw_sym_ls = self._build_cl_ls(cls_ivfs, cls_w1, cls_w2)
+        self.K_ls   = K_ls
+        self.Kw1_ls  = Kw1_ls
+        self.w2K_ls  = w2K_ls
+        self.wKw_sym_ls = wKw_sym_ls
         # We need the symmetric part only of this (there is a trace against symmetric K)
+
+        self.cls_w1 = cls_w1
+        self.cls_w2 = cls_w2
+        self.cls_ivfs = cls_ivfs
 
         self._cos2p_sin2p = None
 
@@ -43,6 +49,16 @@ class nhl_fft:
         norm = (self.box.shape[0] / self.box.lsides[0]) ** 2  # overall final normalization from rfft'ing
         norm *= (float(self.box.lminbox)) ** 4
         self.norm = norm
+
+    @staticmethod
+    def _build_cl_ls(cls_ivfs, cls_w1, cls_w2):
+        K_ls   = cls_dot([cls_ivfs])
+        Kw1_ls  = cls_dot([cls_ivfs, cls_w1])
+        w2K_ls  = cls_dot([cls_w2, cls_ivfs])
+        wKw_sym_ls = 0.5 * (cls_dot([cls_w1, cls_ivfs, cls_w2]) + cls_dot([cls_w2, cls_ivfs, cls_w1]))
+        # We need the symmetric part only of this (there is a trace against symmetric K)
+        return K_ls, Kw1_ls, w2K_ls, wKw_sym_ls
+
 
     def _ifft2(self, rm):
         oshape = self.box.shape if rm.ndim == 2 else (rm.shape[0], self.box.shape[0], self.box.shape[1])
@@ -106,6 +122,101 @@ class nhl_fft:
         n0_2d_cc = nx ** 2 * Fyy + ny ** 2 * Fxx - 2 * nx * ny * Fxy    # lensing curl
 
         return - self.norm * np.array([n0_2d_gg, n0_2d_cc])
+
+    def get_nhl_ds_2d(self, k, cls_ivfs_dd, _pyfftw=True):
+        """Returns unormalized QE noise for each and every 2d multipole on the flat-sky box
+
+            This returns the 'ds' unnormalized expectation (where data spectra do not match sims spectra)
+            See e.g. Planck papers. For d~s, twice the output is ~ N0
+
+            ds ~ 1/2 (\bar X S_WF + \bar S X_WF)
+
+            Note:
+                On a square-periodic flat-sky box there can be tiny differences of N0(L) for same |L|
+
+            No attempt is at optimization. see get_nhl method for much faster N0 array calculation
+
+
+
+        """
+        X2i = {'T': 0, 'E': 1, 'B': 2}
+        ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
+        ls = self.box.ls()
+
+        ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
+        Ss = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+        Ts = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+
+        XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
+        Fs = np.zeros((4, self.box.shape[0], self.box.shape[1]), dtype=float) # 00, 11 and 01 10 components
+        Ks_ls, Ksw_ls, wKs_ls, wKsw_sym_ls = self._build_cl_ls(self.cls_ivfs, self.cls_w1, self.cls_w2)
+        Kd_ls, Kdw_ls, wKd_ls, wKdw_sym_ls = self._build_cl_ls(cls_ivfs_dd,   self.cls_w1, self.cls_w2)
+
+        for i, S in enumerate(Ss):  # daig and off-diag
+            for T in Ts: # not certain about syms in all cases, dropping this
+                Kd      = np.zeros(self.box.rshape, dtype=complex)
+                Ks      = np.zeros(self.box.rshape, dtype=complex)
+                wKdw_sym_11 = np.zeros(self.box.rshape, dtype=complex)
+                wKdw_sym_00 = np.zeros(self.box.rshape, dtype=complex)
+                wKdw_sym_01 = np.zeros(self.box.rshape, dtype=complex)
+                wKsw_sym_11 = np.zeros(self.box.rshape, dtype=complex)
+                wKsw_sym_00 = np.zeros(self.box.rshape, dtype=complex)
+                wKsw_sym_01 = np.zeros(self.box.rshape, dtype=complex)
+                wKd_1   = np.zeros(self.box.rshape, dtype=complex)
+                Kdw_1   = np.zeros(self.box.rshape, dtype=complex)
+                wKd_0   = np.zeros(self.box.rshape, dtype=complex)
+                Kdw_0   = np.zeros(self.box.rshape, dtype=complex)
+                wKs_1   = np.zeros(self.box.rshape, dtype=complex)
+                Ksw_1   = np.zeros(self.box.rshape, dtype=complex)
+                wKs_0   = np.zeros(self.box.rshape, dtype=complex)
+                Ksw_0   = np.zeros(self.box.rshape, dtype=complex)
+                for XY in XYs:  # TT, TE, ET, EE, BB for MV or SQE
+                    X,Y = XY
+                    fac = self.box.X2S(S, X) * self.box.X2S(T, Y)
+                    if np.any(fac):
+                        #if S != T: fac *= np.sqrt(2.)# off-diagonal terms come with factor of 2
+                        i = X2i[X]; j = X2i[Y]
+                        Kd      +=       Kd_ls  [i, j][ls] * fac
+                        wKdw_sym_00 +=  -1 * wKdw_sym_ls[i, j][ls] * ny * ny * fac
+                        wKdw_sym_11 +=  -1 * wKdw_sym_ls[i, j][ls] * nx * nx * fac
+                        wKdw_sym_01 +=  -1 * wKdw_sym_ls[i, j][ls] * nx * ny * fac
+
+                        Ks      +=       Ks_ls  [i, j][ls] * fac
+                        wKsw_sym_00 +=  -1 * wKsw_sym_ls[i, j][ls] * ny * ny * fac
+                        wKsw_sym_11 +=  -1 * wKsw_sym_ls[i, j][ls] * nx * nx * fac
+                        wKsw_sym_01 +=  -1 * wKsw_sym_ls[i, j][ls] * nx * ny * fac
+
+                        Kdw_0   +=  1j * Kdw_ls [i, j][ls] * ny * fac
+                        Kdw_1   +=  1j * Kdw_ls [i, j][ls] * nx * fac
+                        wKd_0   +=  1j * wKd_ls [i, j][ls] * ny * fac
+                        wKd_1   +=  1j * wKd_ls [i, j][ls] * nx * fac
+
+                        Ksw_0   +=  1j * Ksw_ls [i, j][ls] * ny * fac
+                        Ksw_1   +=  1j * Ksw_ls [i, j][ls] * nx * fac
+                        wKs_0   +=  1j * wKs_ls [i, j][ls] * ny * fac
+                        wKs_1   +=  1j * wKs_ls [i, j][ls] * nx * fac
+
+                ir2Kd = ir2(Kd)
+                ir2Ks = ir2(Ks)
+
+                Fs[0] +=     ir2Kd  * ir2(wKsw_sym_00) + ir2(Kdw_0) * ir2(wKs_0)
+                Fs[0] +=     ir2Ks  * ir2(wKdw_sym_00) + ir2(Ksw_0) * ir2(wKd_0)
+
+                Fs[1] +=     ir2Kd  * ir2(wKsw_sym_11) + ir2(Kdw_1) * ir2(wKs_1)
+                Fs[1] +=     ir2Ks  * ir2(wKdw_sym_11) + ir2(Ksw_1) * ir2(wKd_1)
+
+                Fs[2] += ir2Kd * ir2(wKsw_sym_01) + ir2(Kdw_0) * ir2(wKs_1)
+                Fs[2] += ir2Ks * ir2(wKdw_sym_01) + ir2(Ksw_0) * ir2(wKd_1)
+
+                Fs[3] += ir2Kd * ir2(wKsw_sym_01) + ir2(Kdw_1) * ir2(wKs_0)
+                Fs[3] += ir2Ks * ir2(wKdw_sym_01) + ir2(Ksw_1) * ir2(wKd_0)
+
+        Fyy, Fxx, Fxy, Fyx = np.fft.rfft2(Fs).real
+        n0_2d_gg = ny ** 2 * Fyy + nx ** 2 * Fxx + nx * ny * (Fxy + Fyx)    # lensing gradient
+        n0_2d_cc = nx ** 2 * Fyy + ny ** 2 * Fxx - nx * ny * (Fxy + Fyx)    # lensing curl
+
+        return - 0.25 * self.norm * np.array([n0_2d_gg, n0_2d_cc])
+
 
     def get_nhl(self, k, _pyfftw=True):
         """Returns unormalized-QE noise for multipole along an axis of the box
