@@ -59,7 +59,7 @@ class len_fft:
             specs = ['ee', 'bb']
             XYs = ['EE', 'BB']
         elif job == 'TP':
-            STs =['TT', 'TQ', 'TU','QQ', 'QU', 'UU']
+            STs =['TT', 'TQ', 'TU','QQ', 'QU', 'UU']#, 'QT', 'UT', 'UQ']
             specs = ['tt', 'te', 'ee', 'bb']
             XYs = ['TT', 'EE', 'BB', 'TE', 'ET']
         else:
@@ -71,7 +71,7 @@ class len_fft:
         #=== Builds unlensed Stokes matrices to update later on
         ls = self.box.ls()
         for iST, ST in enumerate(STs):
-            for XY in XYs:  # === TT, TE, ET, EE, BB at most
+            for XY in XYs:  # === TT, TE, ET, TE, EE, BB at most
                 unlCST[iST] += self.cunl_ls[X2i[XY[0]], X2i[XY[1]]][ls] * self.box.X2S(ST[0], XY[0]) * self.box.X2S(ST[1], XY[1])
         nyx = np.array(np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij'))
         if der_axis is not None:
@@ -105,7 +105,10 @@ class len_fft:
             X, Y = spec.upper()
             lencls_tot[spec] = np.zeros(self.box.rshape, dtype=float)
             for iST, (S, T) in enumerate(STs):  # daig and off-diag
-                fac = (1 + (S != T)) *  self.box.X2S(S, X) * self.box.X2S(T, Y)
+                #fac = (1 + (S != T)) *  self.box.X2S(S, X) * self.box.X2S(T, Y)
+                fac = self.box.X2S(S, X) * self.box.X2S(T, Y)
+                if S != T:
+                    fac += self.box.X2S(T, X) * self.box.X2S(S, Y)
                 if np.any(fac):
                     lencls_tot[spec] += lenCST_tot[iST] * fac
         return lencls_tot, specs
