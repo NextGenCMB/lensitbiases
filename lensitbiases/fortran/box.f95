@@ -9,7 +9,7 @@
 !        call dfftw_plan_dft_r2c_2d(plan,M,N,in,out,FFTW_ESTIMATE)
 !        call dfftw_execute_dft_r2c(plan, in, out)
 !        call dfftw_destroy_plan(plan)
-
+! FIXME: f2py does not support user-defined types !?
 module class_box
   implicit none
   private
@@ -25,8 +25,6 @@ contains
 
   subroutine box_print(this)
     type(Box), intent(in) :: this
-    real :: area
-    area = circle_area(this)  ! Call the circle_area function
     print *, 'Box: lside = ', this%lside, ' npix on a side = ', this%npix
   end subroutine box_print
 end module
