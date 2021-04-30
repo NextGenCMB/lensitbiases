@@ -201,7 +201,7 @@ class cmbconf:
             N0s.append(N0[:lmax_qlm+1])
             N0pN1 = N0
             ls, = np.where(lib_len.box.mode_counts()[:lmax_qlm+1])
-        if False:
+        if True:
             return np.array(N0s), (cls_plen, cpp), ls
         return np.array(N0s), np.array(N1s), (cls_plen, cpp), ls
 
