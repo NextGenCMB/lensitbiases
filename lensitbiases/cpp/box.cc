@@ -19,25 +19,21 @@ class Square
     int nk1; // number of frequencies in first dimension
     int nk2; // number of frequencies in second dimension
 
-    int* is(int i){// unsigned frequency for 1d index i
-      int i1_mid = nk1 / 2 + 1;
-      static int j[2] = {i%nk1, i/nk1};
-      if (j[0] > i1_mid){
-        // bla bla bla
-      }
-      return j;
-    }
-
+    std::vector<int> k1; // signed fft frequencies along first axis
+    std::vector<int> k2; // signed fft frequencies along second axis
+    
   public:
     Square(const double lside_, const int npix_) {
       lside = lside_; 
       npix = npix_;
       nk1 = npix; 
       nk2 = npix / 2 + 1;
-      }  
-    double lmin(){  // for normalization etc
-      return 2 * M_PI / lside;
+      for (int i2=0; i2<nk2; i2++) {
+        k2.push_back(i2); }
+      
     }
+           
+    double lmin(){return 2 * M_PI / lside;}
 
     a_c_c cos2p(){  // cos 2phi for pixel i in rfft map (cos 2p = 2 cos^2 p - 1 =  (ix ** 2 - iy ** 2) / (ix ** 2 + iy ** 2)) 
       a_c_c c2p_(nk1 * nk2);

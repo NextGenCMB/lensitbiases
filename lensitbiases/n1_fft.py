@@ -305,6 +305,7 @@ class n1_fft:
                         W1_SS_01 += term1 * (self.l1s[0] * self.l2s[1] + self.l1s[1] * self.l2s[0])
                         W2_SS_01 += term2 * (self.l1s[0] * self.l2s[1] + self.l1s[1] * self.l2s[0])
 
+        # TODO: to get curl key only change should be these two lines here:
         Ll1 = np.sum((self.l1s + self.l2s) * self.l1s, axis=0)
         Ll2 = np.sum((self.l1s + self.l2s) * self.l2s, axis=0)
         for W in [W1_SS, W1_SS_00, W1_SS_z0, W1_SS_0z, W1_SS_01]:
