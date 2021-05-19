@@ -177,8 +177,21 @@ class n1_fft:
         self.l2s = -np.array(self._get_shifted_lylx_sym (L * 0.5, rfft=rfft))  # this is -(q - L/2) = L/2 - q
         self.l1_int = self.box.rsqd2l(np.sum(self.l1s ** 2, axis=0))
         self.l2_int = self.box.rsqd2l(np.sum(self.l2s ** 2, axis=0))
-
-        if k in ['p_p', 'p']:
+        # TODO: to get curl key only change should be these two lines here:
+        # For curl estimator must replace i (Lx ly) by i (-Ly Lx)
+        # In principle we have l1 + l2 = (L/root(2), L/root(2)) but lets keep it explicit
+        if k[0] == 'p':
+            self.Ll1 = np.sum((self.l1s + self.l2s) * self.l1s, axis=0)
+            self.Ll2 = np.sum((self.l1s + self.l2s) * self.l2s, axis=0)
+        elif k[0] == 'x':
+            self.Ll1 = -(self.l1s + self.l2s)[1] * self.l1s[0] + (self.l1s + self.l2s)[0] * self.l1s[1]
+            self.Ll2 = -(self.l1s + self.l2s)[1] * self.l2s[0] + (self.l1s + self.l2s)[0] * self.l2s[1]
+        elif k[0] == 'f':
+            self.Ll1 = 1.
+            self.Ll2 = 1.
+        else:
+            assert 0, 'dont know what to do for QE key ' + k + ', implement this.'
+        if k in ['p_p', 'p', 'x_p', 'x']:
             l1s, l2s = (self.l1s, self.l2s)
             r1sqd_r2sqd = np.sum(l1s ** 2, axis=0) * np.sum(l2s ** 2, axis=0)
             dotp = np.sum(l1s * l2s, axis=0)
@@ -195,6 +208,8 @@ class n1_fft:
         self.l2_int = None
         self._cos2p_sin2p_v1 = None
         self._cos2p_sin2p = None
+        self.Ll1 = None
+        self.Ll2 = None
 
     def cos2p_sin2p_2v(self):
         """Returns the cosines and sines of twice the angle between the two maps of vectors
@@ -305,13 +320,11 @@ class n1_fft:
                         W1_SS_01 += term1 * (self.l1s[0] * self.l2s[1] + self.l1s[1] * self.l2s[0])
                         W2_SS_01 += term2 * (self.l1s[0] * self.l2s[1] + self.l1s[1] * self.l2s[0])
 
-        # TODO: to get curl key only change should be these two lines here:
-        Ll1 = np.sum((self.l1s + self.l2s) * self.l1s, axis=0)
-        Ll2 = np.sum((self.l1s + self.l2s) * self.l2s, axis=0)
+
         for W in [W1_SS, W1_SS_00, W1_SS_z0, W1_SS_0z, W1_SS_01]:
-            W *= Ll1
+            W *= self.Ll1
         for W in [W2_SS, W2_SS_00, W2_SS_z0, W2_SS_0z, W2_SS_01]:
-            W *= Ll2
+            W *= self.Ll2
         SS = (W1_SS + W2_SS).astype(complex)
         SS_00 = (-1) * (W1_SS_00 + W2_SS_00).astype(complex)
         SS_01_re = (-1 * 0.5) *(W1_SS_01 + W2_SS_01).astype(complex)
@@ -411,12 +424,10 @@ class n1_fft:
                         W1_ST_0z += toST * RtR_YXp * cl_XY_1_0[self.l1_int] * cl_XpYp_1[self.l2_int] * self.l1s[0]
                         W2_ST_0z += toST * RtR_YXp * cl_XY_2_0[self.l1_int] * cl_XpYp_2[self.l2_int] * self.l1s[0]
 
-        Ll1 = np.sum((self.l1s + self.l2s) * self.l1s, axis=0)
-        Ll2 = np.sum((self.l1s + self.l2s) * self.l2s, axis=0)
         for W in [W1, W1_01, W1_10, W1_TS_0z, W1_TS_z0, W1_ST_z0, W1_ST_0z]:
-            W *= Ll1
+            W *= self.Ll1
         for W in [W2, W2_01, W2_10, W2_TS_0z, W2_TS_z0, W2_ST_z0, W2_ST_0z]:
-            W *= Ll2
+            W *= self.Ll2
         #i_sign = 1j ** (ders_1 is not None) * 1j ** (ders_2 is not None)
         W_re =  0.5  * (W1[0] + W2[0]).astype(complex)
         W_im = -0.5j * (W1[1] + W2[1])
@@ -568,13 +579,10 @@ class n1_fft:
                     print('term1 ' + X + Y + ' ' + Xp + Yp + ' empty! ' * (not np.any(term1)))
                 if verbose:
                     print('term2 ' + X + Y + ' ' + Xp + Yp + ' empty! ' * (not np.any(term1)))
-
-        Ll1 = np.sum((self.l1s + self.l2s) * self.l1s, axis=0)
-        Ll2 = np.sum((self.l1s + self.l2s) * self.l2s, axis=0)
         for W in [W1_zz, W1_0z, W1_z0, W1_00, W1_10, W1_01]:
-            W *= Ll1
+            W *= self.Ll1
         for W in [W2_zz, W2_0z, W2_z0, W2_00, W2_10, W2_01]:
-            W *= Ll2
+            W *= self.Ll2
         #i_sign = 1j ** (ders_1 is not None) * 1j ** (ders_2 is not None)
         W_zz = (W1_zz + W2_zz).astype(complex)
         W_zz[2] *=  0.5
@@ -653,8 +661,8 @@ class n1_fft:
                             print('term2 ' + X + Y + ' ' + Xp + Yp)
 
 
-        W1 *= np.sum( (self.l1s + self.l2s) * self.l1s, axis=0)
-        W2 *= np.sum( (self.l2s + self.l1s) * self.l2s, axis=0)
+        W1 *= self.Ll1
+        W2 *= self.Ll2
         i_sign = 1j  ** (ders_1 is not None) * 1j ** (ders_2 is not None)
         return i_sign* (W1 + W2)#, W1, W2
 
@@ -698,7 +706,7 @@ class n1_fft:
                     n1 += np.sum(xipp * (term1 - term2).real)
 
         elif _optimize == 1:
-            assert k == 'p_p'
+            assert k in ['p_p', 'x_p']
             # is a bit faster but assumes sep_TP
             # 20 rfft's instead of 5 for T.
             # For small boxes though the building of the weights can be more than the FFT's
@@ -729,13 +737,13 @@ class n1_fft:
             # This assumes nothing except C^{EB} == C^{TB} = 0
 
             self._build_key(k, L, rfft=_rfft)
-            if k == 'p':
+            if k in ['p', 'x']:
                 terms  = self._get_n1_SS('Q') + self._get_n1_SS('U') + self._get_n1_SS('T')
                 terms += self._get_n1_TS('Q', 'U') + self._get_n1_TS('T', 'Q') + self._get_n1_TS('T', 'U')
 
-            elif k =='ptt':
+            elif k in ['ptt', 'xtt']:
                 terms = self._get_n1_SS('T')
-            elif k == 'p_p':
+            elif k in ['p_p', 'x_p']:
                 terms  = self._get_n1_SS('Q') + self._get_n1_SS('U') + self._get_n1_TS('Q', 'U')
             else:
                 assert 0, k + 'not implemented'
