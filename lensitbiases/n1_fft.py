@@ -22,6 +22,7 @@ r"""rFFT N1 and N1 matrix main module
 import numpy as np
 from lensitbiases.utils_n1 import extcl, cls_dot, prepare_cls
 from lensitbiases.box import box
+from lensitbiases.utils_box import lowprimes
 import os
 import pyfftw
 
@@ -39,7 +40,6 @@ def get_n1(k, Ls, jt_TP, do_n1mat=True, lminbox=50, lmaxbox=2500):
             lminbox: minimum multipole of the 2D box used
             lmaxbox: maximum multipole of the 2D box used along an axis
                     (often this can be kept fairly small since high lensing multipoles contribute very little)
-
 
         Note:
 
@@ -92,14 +92,15 @@ class n1_fft:
                         (in principle always the grad-lensed Cls, but for practical purposes the lensed cls are very close to this as well)
                   lminbox: a 2d flat-sky will be constructed with this as minimum multipole
                   lmaxbox: a 2d flat-sky will be constructed with this as maximum multipole along an axis
+                           (or slightly more than this, as the box size will be forced to match a powr of small primes)
 
             There are presumably still possible speed-ups in the small-box regime where the ffts does not actually dominate the cost
 
         """
 
         lside = 2. * np.pi / lminbox
-        npix = int(lmaxbox / np.pi * lside) + 1
-        if npix % 2 == 1: npix += 1
+        npix = lowprimes(int(lmaxbox / np.pi * lside) + 1)
+#        if npix % 2 == 1: npix += 1
 
         #===== instance with 2D flat-sky box info
         self.box = box(lside, npix, k2l=k2l)
@@ -129,8 +130,8 @@ class n1_fft:
         # === precalc of deflection corr fct:
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
-        self.xipp = np.array([np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2),
-                              np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny)])# 01 or 10
+        self.xipp = np.array([np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2, s=self.box.shape),
+                              np.fft.irfft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny, s=self.box.shape)])# 01 or 10
         del nx, ny, ls
 
         # === normalization (for lensing keys at least)
@@ -676,7 +677,7 @@ class n1_fft:
 
     def get_n1(self, k, L, do_n1mat=True, _optimize=2, _pyfftw=True):
         L = float(L)
-        if not _pyfftw: self._irfft2 = np.fft.irfft2
+        if not _pyfftw: self._irfft2 = lambda m : np.fft.irfft2(m,s=self.box.shape)
         _rfft = True
         n1_mat = None
         #if _optimize == 2:

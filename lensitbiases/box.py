@@ -8,16 +8,12 @@ from lensitbiases.utils_n1 import cli
 
 class box:
     def __init__(self, lside, npix, k2l=None):
-        assert npix % 2 == 0, npix
-
         shape  = (npix, npix)
         rshape = (npix, npix // 2 + 1)
 
         # === frequencies
-        nx = freqs(np.arange(rshape[1]), shape[1])  # unsigned FFT frequencies
-        ny = freqs(np.arange(shape[0]), shape[0])
-        nx[shape[1] // 2:] *= -1
-        ny[shape[0] // 2:] *= -1
+        nx = freqs(np.arange(rshape[1]), shape[1], signed=True)  # unsigned FFT frequencies
+        ny = freqs(np.arange(shape[0]), shape[0], signed=True)
 
         self.nx_1d = nx
         self.ny_1d = ny
