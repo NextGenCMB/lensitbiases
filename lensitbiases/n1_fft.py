@@ -691,7 +691,7 @@ class n1_fft:
         #if _optimize == 2:
         #     _optimize = 1 if k == 'p_p' else 2
         if _optimize==0:  #--- raw, slower version serving as test case
-            Xs = ['T']#, 'Q', 'U']
+            Xs = ['T' 'Q', 'U']
             self._build_key(k, L, rfft=False)
             n1 = 0.
             for a in [0, 1]:
