@@ -183,12 +183,16 @@ class n1_fft:
         if k[0] == 'p':
             self.Ll1 = np.sum((self.l1s + self.l2s) * self.l1s, axis=0)
             self.Ll2 = np.sum((self.l1s + self.l2s) * self.l2s, axis=0)
+            self.parity = 1
         elif k[0] == 'x':
             self.Ll1 = -(self.l1s + self.l2s)[1] * self.l1s[0] + (self.l1s + self.l2s)[0] * self.l1s[1]
             self.Ll2 = -(self.l1s + self.l2s)[1] * self.l2s[0] + (self.l1s + self.l2s)[0] * self.l2s[1]
+            self.parity = -1
+
         elif k[0] == 'f':
             self.Ll1 = 1.
             self.Ll2 = 1.
+            self.parity = 1
         else:
             assert 0, 'dont know what to do for QE key ' + k + ', implement this.'
         if k in ['p_p', 'p', 'x_p', 'x']:
@@ -210,6 +214,7 @@ class n1_fft:
         self._cos2p_sin2p = None
         self.Ll1 = None
         self.Ll2 = None
+        self.parity = None
 
     def cos2p_sin2p_2v(self):
         """Returns the cosines and sines of twice the angle between the two maps of vectors
@@ -680,7 +685,7 @@ class n1_fft:
         """Factors of xi_00 and xi_11 in N1 for T == S """
         SS, SS_00, SS_01_re, SS_0z_re, SS_0z_im = self._irfft2(np.array(self._W_SS_diag(S)))
         term_00 =  2 * (SS * SS_00    - (SS_0z_re ** 2         - SS_0z_im ** 2))
-        term_01 =  2 * (SS * SS_01_re - (SS_0z_re * SS_0z_re.T - SS_0z_im * SS_0z_im.T))
+        term_01 =  2 * (SS * SS_01_re - self.parity * (SS_0z_re * SS_0z_re.T - SS_0z_im * SS_0z_im.T))
         return np.array([term_00, term_01])
 
     def get_n1(self, k, L, do_n1mat=True, _optimize=2, _pyfftw=True):
@@ -691,7 +696,7 @@ class n1_fft:
         #if _optimize == 2:
         #     _optimize = 1 if k == 'p_p' else 2
         if _optimize==0:  #--- raw, slower version serving as test case
-            Xs = ['T' 'Q', 'U']
+            Xs = ['T', 'Q', 'U']
             self._build_key(k, L, rfft=False)
             n1 = 0.
             for a in [0, 1]:
