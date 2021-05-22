@@ -240,14 +240,14 @@ class n1_fft:
             if X == 'T':
                 return 0.
             if self._cos2p_sin2p_v1 is None:
-                self._cos2p_sin2p_v1 = {1:  self._cos2p_sin2p(self.l1s), 2: self._cos2p_sin2p(self.l2s)}
+                self._cos2p_sin2p_v1 = {1:  self._get_cos2p_sin2p(self.l1s), 2: self._get_cos2p_sin2p(self.l2s)}
             sgn = 1 if X == 'E' else -1
             return sgn * self._cos2p_sin2p_v1[vec1or2][0 if X == 'E' else 1]
         if S == 'U':
             if X == 'T':
                 return 0.
             if self._cos2p_sin2p_v1 is None:
-                self._cos2p_sin2p_v1 = {1: self._cos2p_sin2p(self.l1s), 2: self._cos2p_sin2p(self.l2s)}
+                self._cos2p_sin2p_v1 = {1: self._get_cos2p_sin2p(self.l1s), 2: self._get_cos2p_sin2p(self.l2s)}
             return self._cos2p_sin2p_v1[vec1or2][1 if X == 'E' else 0]
         assert 0
 
@@ -691,7 +691,7 @@ class n1_fft:
         #if _optimize == 2:
         #     _optimize = 1 if k == 'p_p' else 2
         if _optimize==0:  #--- raw, slower version serving as test case
-            Xs = ['T', 'Q', 'U']
+            Xs = ['T']#, 'Q', 'U']
             self._build_key(k, L, rfft=False)
             n1 = 0.
             for a in [0, 1]:
