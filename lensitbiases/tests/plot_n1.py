@@ -4,8 +4,6 @@ import lensitbiases as lb
 from lensitbiases import n0_fft, n1_fft, utils_n1
 from scipy.interpolate import UnivariateSpline as spl
 
-# FIXME: curl with optimize 0 looks OK, but not with optimize 2
-# FIXME: --> there are probably assumptions made in the symmetries that holds for phi but not the curl
 qekey = 'xtt'
 
 cls_unl, cls_len, cls_grad = lb.get_default_cls() # default CMB cls (put here the one you are using)
@@ -22,11 +20,11 @@ if 'te' in fal.keys(): fal['te'] *= 0.
 
 
 # Building (unnormalized estimate) N1 on a grid of 50 points
-lib_n1 = n1_fft.n1_fft(fal, cls_len, cls_grad, cls_unl['pp'], lminbox=lminbox, lmaxbox=6000, k2l='lensit')
+lib_n1 = n1_fft.n1_fft(fal, cls_len, cls_grad, cls_unl['pp'], lminbox=lminbox, lmaxbox=4000, k2l='lensit')
 Ls_n1 = np.linspace(lminbox, 2048, 25)
 n1_s4like = np.array([lib_n1.get_n1(qekey, L, do_n1mat=False) for L in Ls_n1])
 n1_s4like_chck = np.array([lib_n1.get_n1(qekey, L, do_n1mat=False, _optimize=0) for L in Ls_n1])
-print(n1_s4like / n1_s4like_chck -1.)
+print(n1_s4like / n1_s4like_chck -1)
 pl.plot(Ls_n1, n1_s4like)
 pl.xlabel(r'$L$', fontsize=14)
 pl.ylabel(r'$n_L^{(1)}$', fontsize=14)
