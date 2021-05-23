@@ -177,22 +177,21 @@ class n1_fft:
         self.l2s = -np.array(self._get_shifted_lylx_sym (L * 0.5, rfft=rfft))  # this is -(q - L/2) = L/2 - q
         self.l1_int = self.box.rsqd2l(np.sum(self.l1s ** 2, axis=0))
         self.l2_int = self.box.rsqd2l(np.sum(self.l2s ** 2, axis=0))
-        # TODO: to get curl key only change should be these two lines here:
         # For curl estimator must replace i (Lx ly) by i (-Ly Lx)
         # In principle we have l1 + l2 = (L/root(2), L/root(2)) but lets keep it explicit
         if k[0] == 'p':
             self.Ll1 = np.sum((self.l1s + self.l2s) * self.l1s, axis=0)
             self.Ll2 = np.sum((self.l1s + self.l2s) * self.l2s, axis=0)
-            self.parity = 1
+            self.xy_sym = 1
         elif k[0] == 'x':
             self.Ll1 = -(self.l1s + self.l2s)[1] * self.l1s[0] + (self.l1s + self.l2s)[0] * self.l1s[1]
             self.Ll2 = -(self.l1s + self.l2s)[1] * self.l2s[0] + (self.l1s + self.l2s)[0] * self.l2s[1]
-            self.parity = -1
+            self.xy_sym = -1
 
         elif k[0] == 'f':
             self.Ll1 = 1.
             self.Ll2 = 1.
-            self.parity = 1
+            self.xy_sym = 1
         else:
             assert 0, 'dont know what to do for QE key ' + k + ', implement this.'
         if k in ['p_p', 'p', 'x_p', 'x']:
@@ -214,7 +213,7 @@ class n1_fft:
         self._cos2p_sin2p = None
         self.Ll1 = None
         self.Ll2 = None
-        self.parity = None
+        self.xy_sym = None
 
     def cos2p_sin2p_2v(self):
         """Returns the cosines and sines of twice the angle between the two maps of vectors
@@ -791,7 +790,7 @@ class n1_fft:
         assert T != S
         W_re, W_im, W00_re, W00_im, W_01_re, W_01_im, W_0z_re, W_0z_im, W_z0_re, W_z0_im = self._irfft2(np.array(self._W_TS_odiag(T, S, verbose=verbose)))
         # UQ_{0,z} = - QU_{z, 0}^dagger
-        sgn_Q = self.parity if 'Q' in [T, S] else -self.parity
+        sgn_Q = self.xy_sym if 'Q' in [T, S] else -self.xy_sym
         # symmetry taking W_(1,) to W_(0,) takes a parity * (-1)^{ (S = Q) + (T = Q)}
         term_00 = 4. * ( (W00_re  * W_re + W00_im  * W_im) + (W_0z_re * W_z0_re      + W_0z_im * W_z0_im))
         term_01 = 4. * ( (W_01_re * W_re + W_01_im * W_im) + sgn_Q * (W_0z_re * (-W_z0_re.T) - W_0z_im * W_z0_im.T))
@@ -801,7 +800,7 @@ class n1_fft:
         """Factors of xi_00 and xi_11 in N1 for T == S """
         SS, SS_00, SS_01_re, SS_0z_re, SS_0z_im = self._irfft2(np.array(self._W_SS_diag(S)))
         term_00 =  2 * (SS * SS_00    - (SS_0z_re ** 2  - SS_0z_im ** 2))
-        term_01 =  2 * (SS * SS_01_re - self.parity * (SS_0z_re * SS_0z_re.T - SS_0z_im * SS_0z_im.T))
+        term_01 =  2 * (SS * SS_01_re - self.xy_sym * (SS_0z_re * SS_0z_re.T - SS_0z_im * SS_0z_im.T))
         return np.array([term_00, term_01])
 
     def get_n1(self, k, L, do_n1mat=True, _optimize=2, _pyfftw=True):

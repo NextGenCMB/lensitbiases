@@ -28,7 +28,7 @@ def test_transpose(k, L):
                     # Tests W^{ST, (1,1)} = sgn * W^{ST, (0,0)}.transpose()
                     WST_0 = np.fft.ifft2(slib._W_ST(T, S, verbose=False, ders_1=d0, ders_2=d1))
                     WST_1 = np.fft.ifft2(slib._W_ST(T, S, verbose=False, ders_1=1-d0, ders_2=None if d1 is None else 1-d1))
-                    sgn = (-1) ** (S == 'Q') *  (-1) ** (T == 'Q') * slib.parity
+                    sgn = (-1) ** (S == 'Q') *  (-1) ** (T == 'Q') * slib.xy_sym
                     if not np.allclose(WST_1.transpose(),sgn * WST_0):
                         print(k + ": NOK " + S + T + '_0 = ' +'%2s x '%str(sgn) + S + T + '_1' + '  jTP' *jt_TP)
                         return False
@@ -40,7 +40,7 @@ def test_transpose(k, L):
             for a in [None]:
                 WST= np.fft.ifft2(slib._W_ST(S, T))
                 WTS= np.fft.ifft2(slib._W_ST(T, S))
-                sgn = - (-1) ** (S == 'Q') *  (-1) ** (T == 'Q') * slib.parity
+                sgn = - (-1) ** (S == 'Q') *  (-1) ** (T == 'Q') * slib.xy_sym
                 real = WST.real - WTS.real
                 imag = WST.imag - sgn * WTS.transpose().imag
 
