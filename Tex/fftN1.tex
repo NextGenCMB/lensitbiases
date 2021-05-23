@@ -35,84 +35,83 @@
 \newcommand{\intLp}{\int_{\substack{\bl'_1 + \bl'_2 \\ =\bll' }}}
 
 \newcommand{\cred}[1]{\color{red} {#1} \color{black}}
+Starting from the 'usual' n1,
 \begin{equation}
 \begin{split}
-N^{(1)}(L) = &\intL \intLp \Xi_{ij}(\bl_1, \bl_2) \Xi_{pq}(\bl'_1, \bl'_2) \\ &\times\left[ C^{\phi \phi}_{|\bl_1+\bl'_1|}f_{ip}(\bl_1, \bl'_1) f_{jq}(\bl_2, \bl'_2) + C^{\phi \phi}_{|\bl_1+\bl'_2|}f_{iq}(\bl_1, \bl'_2) f_{jp}(\bl_2, \bl'_1) \right] ,
+n^{(1)}(L) = &\intL \intLp \Xi_{ij}(\bl_1, \bl_2) \Xi_{pq}(\bl'_1, \bl'_2) \\ &\times\left[ C^{\phi \phi}_{|\bl_1+\bl'_1|}f_{ip}(\bl_1, \bl'_1) f_{jq}(\bl_2, \bl'_2) + C^{\phi \phi}_{|\bl_1+\bl'_2|}f_{iq}(\bl_1, \bl'_2) f_{jp}(\bl_2, \bl'_1) \right].
 \end{split}
 \end{equation}
-For completely separable weight and response functions, we may write schematically the bias as sums of simple terms \color{red}{NB can absorb the lensing gradient scalar product in Cpp. In the estimator can use a single term $d_{yy}$ example}  \color{black}
-\begin{equation}
-	N^{(1)}(L) \ni  \int d\br\: \xi^{\phi \phi}(\br)\left[ h^{12}_{\bll}(\br) h^{34}_{-\bll}(\br) + g^{12}_{\bll}(\br) g^{43}_{-\bll}(\br)\right ]
-\end{equation}
-where the Fourier maps of all the $h$ and $g$ functions are given by, for the appropriate weights $w$,
-\begin{equation}
-	\tilde h^{ij}_{\bll}(\bl) =  w^i(\bl) w^j(\bll - \bl) = w^i(\bl) w^{\star, j}(\bl - \bll)
-\end{equation}
-(Here, the indices 1 2 3 4 corresponds to $i,j,p,q$. NB: THIS ASSUMES complex conjugacy property of the weights!)
-Explicitly:
-\begin{equation}
-\begin{split}
-\textrm{for }h^{12}:\quad w^1 &= F^1 W_{12}^{(0)} f^{(0)}_{13}	\quad w^2 = F^2W_{12}^{(1)}f^{(0)}_{24} \\
-\textrm{for }h^{34}:\quad w^3 &= F^3 W_{34}^{(0)} f^{(1)}_{13}	\quad w^4 = F^4W_{34}^{(1)}f^{(1)}_{24} \\
-\textrm{for }g^{12}:\quad w^1 &= F^1 W_{12}^{(0)} f^{(0)}_{14}	\quad w^2 = F^2W_{12}^{(1)}f^{(0)}_{23} \\
-\textrm{for }g^{43}:\quad w^4 &= F^4 W_{34}^{(1)} f^{(1)}_{14}	\quad w^3 = F^3W_{34}^{(0)}f^{(1)}_{23} \\
-\end{split}
-\end{equation}
-(Filters $F$'s can always be absorbed into $W$'s)
-Thus, the cost of one of these terms is that a couple of FFT's per $L$. Creating the $h$'s is super easy (e.g. with np roll)
-
-
-It looks like the FFTs of the resolution necessary for similar sampling than my current code ($\sim 1 $sec unthreaded per TT lensing term) might correspond to boxes of 64 pixels, which gives me sub-milliseconds python FFT's. 
-For spin-0 QE's and anisotropy sources this is particularly simple. For lensing the deflection vector QE's are indeed all separable, but there is a number of terms owing to the two components and is some algebraic mess. One very simple test to just check could be the use the vector form in the QE but the lensing gradient response with 6 fully separable terms. This would lead to $\sim 6 \times 6 \times 3$ such operations?
-
-\subsection{method for lensing gradient}
+generally, the strategy used here is as follows (we use $S,T$ for Stokes indices $\in (I, Q, U)$ and $X, Y$ (or $I, J$) for $T, E, B$:
 \begin{itemize}
-\item All the scalar products in the gradient responses can be absorbed within $C^{\phi \phi}$ turning it into a sum over $\xi^{\alpha_a \alpha_b}(\br)$ against very simple weight functions $(i \bl^\alpha _1 C_{l_1} +i \bl'^\alpha _1 C_{l'_1} )_\alpha(i \bl_2 C_{l_2} +i \bl'_2 C_{l'_2} )_\beta$ of the deflection vector.
-\item The deflection QE is of the same form, and it is enough to take $L_x^2\cdot <d_x d_x>$ for the gradient and $L_x^2<d_yd_y>$ for the curl (curl, but still lensing gradient-induced bias)
-\item All terms become proportional to terms like
-\begin{equation}
-	g^{ij}_{L,(\alpha.. , \beta...)} \equiv \int \frac{d\bl_1}{(2\pi)^2} F_{\bl_1}F_{\bl_2} C_{l_1}^{i}C_{l_2}^{j}(i \bl_1)_{\alpha} \cdots(i \bl_2)_{\beta} e^{i \bl_1 \cdot \br} 
-\end{equation}
-where $\bl_1 + \bl_2 = \bll$. (can get something possibly more sensible by going to $l+L,l-L$)Further considerations of symmetries etc reduces the number of terms to compute.
-\end{itemize}
-\cred{Much better: can keep $W^{XY}$ and $W^{IJ}$ fully intact (nd symmetric), needs then only three terms in the responses per $xy$ and derivatives might simplify as well, check this!}
-
-This gives:
-\begin{equation}\boxed{
- \int d\br \:	\xi^{\alpha \beta}(\br) \left[2g^{(11)}_{\bll, (\alpha, \beta)}(\br)g^{(00)}_{-\bll,(0,0)}(\br) + 2 g^{(10)}_{\bll, (\alpha,)}(\br)g^{(01)}_{-\bll,(,\beta)}(\br)\right]}
-\end{equation}
-with
-\begin{equation}
-	g^{ij}_{\bll, (\alpha, \beta)}(\br) = \intL W^{TT}(\bl_1,\bl_2) (i C_{l_1}\bl_1)_{\alpha} (i C_{l_2}\bl_2)_{\beta} e^{i \bl_1 \cdot \br}
-\end{equation}
-We can simplify further going to $\bl - \bll/2$, $\bl + \bll/2$, with the same-looking definitions (with, say, $h's$) The $h$'s have the properties $h_{-\bll, (,\alpha)}^{(0, 1)} = h_{\bll (\alpha,)}^{(1, 0)} $. Further, with $\bll = (L, L)/\sqrt{2}$ we have additional symmetries $h^{11}_{x,x} = h^{11}_{y,y}.transpose()$, $h^{(1, 0)}_{L,(x,)} = h^{(1, 0)}_{L,(y,)}.transpose()$ and similar. End result is (no sums, and for $L_x  = L_y$.
-\begin{equation}
-\boxed{
-\begin{split}
-	&2\int d\br \:	\xi^{yy}(\br) \left[h^{(11)}_{\bll, (y,y)}(\br)h^{(00)}_{\bll,(,)}(\br) +  \left(h^{(10)}_{\bll, (y,)}\right)^2(\br)\right] \\
-	+&2 \int d\br \:	\xi^{yx}(\br)\left[h^{(11)}_{\bll, (y,x)}(\br)h^{(00)}_{\bll,(,)}(\br) +  \left(h^{(10)}_{\bll, (y,)}h^{T,(10)}_{\bll, (y,)}\right)(\br)\right]
-\end{split}
-}
-\end{equation}
-A similar formula holds with the spin-weight transform, where the transpose identites become the complex conjugate operations. (I believe I need complex fft's then though, looks slower)
-
-
-\subsection{Pol and MV}
-Generally, the strategy is as follows:
-\begin{itemize}
-	\item Write the estimators $W^{XY}$ and $W^{IJ}$ in terms of $T,Q,U$, or $_{0, \pm 2}X$.
-	\item The responses then just brings down a factor $i \bl_\alpha C^{st}_{\bl} + \rm{sym}$ (possibly anisotropic if $Q, U$ parametrization).
+	\item Write the estimators $W^{XY}$ and $W^{IJ}$ in terms of $I,Q,U$
+	\item The responses then just brings down a factor $i \bl_\alpha C^{ST}_{\bl} + \rm{sym}$.
 \end{itemize}
 
 So we get:
-\begin{equation}\boxed{
- \int d\br \:	\xi^{\alpha \beta}(\br) \left[2W^{(ST, 11)}_{\bll, (\alpha, \beta)}(\br)W^{(ST, 00)}_{-\bll,(0,0)}(\br) + 2 W^{(ST, 10)}_{\bll, (\alpha,)}(\br)W^{(ST, 01)}_{-\bll,(,\beta)}(\br)\right]}
+\begin{equation}\label{eq:rfftN1}\boxed{
+ \int d\br \:	\xi^{\alpha \beta}(\br) \left[2W^{(ST, (\alpha, \beta))}_{\bll}(\br)W^{(ST)}_{-\bll}(\br) + 2 W^{(ST, \alpha,)}_{\bll}(\br)W^{(ST, (,\beta))}_{-\bll}(\br)\right]}
 \end{equation}
-where there is a sum (trace) over the Stokes map S, T, and ($X, Y \in (T, E ,B), S, T \in (T, Q, U)$)
+where there is a sum (trace) over the Stokes map S, T, and ($X, Y \in (T, E ,B), S, T \in (T, Q, U)$). With $F$ the filtering matrix, $C^w$ the QE weights spectra, we have $(\bl_1 + \bl_2 = \bll)$
 \begin{equation}
-	W^{ST, (00)}_{\bl_1,\bl_2} = R^{SX}_{\bl1} C^{1, XY}_{l_1} (R^tR)^{YX'}_{\bl_1,\bl_2} C_{l_2}^{2, X' Y'} R^{T Y'}_{\bl_2}
+	W^{ST}_{\bl_1,\bl_2} = \frac 12 (FC^{w})^{SS'}_{\bl_1} F_{\bl_2}^{S'T} \cdot (\bl_1\cdot \bll) + \frac 12 F^{SS'}_{\bl_1} (C^wF)_{\bl_2}^{S'T} \cdot (\bl_2\cdot \bll)\quad (\textrm{gradient})
 \end{equation}
-(There are two terms in this sum, one here the $C^{w}$ acts on $\bl_1$ and one where it acts on $\bl_2$). Each factor brings a $i\bl^a C^{f}_{\bl}$ in the relevant place (outer terms that connects).
+or
+\begin{equation}
+	W^{ST}_{\bl_1,\bl_2} = \frac 12 (FC^{w})^{SS'}_{\bl_1} F_{\bl_2}^{S'T} \cdot (\bl_1\star \bll) + \frac 12 F^{SS'}_{\bl_1} (C^wF)_{\bl_2}^{S'T} \cdot (\bl_2\star \bll)\quad (\textrm{curl})
+\end{equation}
+and 
+\begin{equation}
+	W^{ST}(\br) = \int \frac{d\bl}{2\pi} e^{i \bl \cdot \br} \:W^{ST}_{\bll /2 +\bl, \bll/2 - \bl} 
+\end{equation}
+The functions with upperscripts $(\alpha,)$ just inserts a $i{\bl}{_1}^{\alpha} C^{f}_{\bl_1}$ on the left, or on the right if $(,\alpha)$.
+We define $(-1)^P$ the sign of flipping the two components of $\bl_1$ and $\bl_2$; the lensing gradient has $(-1)^P = 1$, the lensing curl has $(-1)^P = -1$.
+\subsection{Symmetries}
+We then use symmetries to fasten the implementation, reducing the number of terms to compute
+\begin{itemize}
+	\item First, we get rid of $-\bll$ and replace it with $\bll$, using (valid for all QE keys)
+\begin{equation}
+\begin{split}
+  W_{-\bll}^{ST} &= W_{+\bll}^{TS}\\
+	W_{-\bll}^{ST, (\alpha,\beta)} &= W_{+\bll}^{TS, (\beta,\alpha)}, \\
+	W_{-\bll}^{ST, (,\alpha)} &= -W_{+\bll}^{TS, (\alpha,)} \\
+	\end{split}
+	\end{equation}
+\item Then, by setting $\bll = (L,L)/\sqrt{2}$ we can turn some $\beta$ derivatives onto $\alpha$ with the help of matrix transposes. Swapping the first and second coordinates one has
+\begin{equation}
+\begin{split}
+	W_{\bll}^{ST}(\br)& = \textrm{sgn}\cdot W^{ST}_{\bll}({\br}^t) \\
+	W_{\bll}^{ST, (1,)}(\br)& = \textrm{sgn}\cdot  W_{\bll}^{ST, (0,)}(\br^t) \\
+		W_{\bll}^{ST, (1, 1)}(\br)& = \textrm{sgn}\cdot  W_{\bll}^{ST, (0,0)}(\br^t) \\
+				W_{\bll}^{ST, (0,1)}(\br)& = \textrm{sgn}\cdot  W_{\bll}^{ST, (1,0)}(\br^t) \\
+		\textrm{ with sgn} &= (-1)^P (-1)^{S == Q} (-1)^{T == Q},\quad  (\bll = (L,L)/\sqrt{2})\end{split}
+\end{equation}
+This assumes all $TB$ and $EB$ spectra are zero, and $\bll$ of the special form   $\bll = (L,L)\sqrt{2}$. This comes about because under a swap of first and second coordinate of $\bl$, we have $\sin 2\phi_{\bl}$ invariant, but $\cos 2\phi_{\bl}$ takes a minus sign, and the underlying weight functions takes a $(-1)^P$.
+\end{itemize}
+Using these results in the following expression for the $TS$ contribution in Eq.\ref{eq:rfftN1}, less elegant but with less calculations to perform:
+\begin{equation}
+\begin{split}
+n^{1} \ni	&\int d\br \: 2\xi^{00}(\br) \cdot \left[2W_{\bll}^{TS, (0, 0)}(\br) W_{\bll}^{ST}(\br)- 2 W_{\bll}^{TS, (0,)}(\br)W_{\bll}^{ST, (0,)}(\br)\right] \\
+	+&\int d\br \: 2\xi^{01}(\br)\cdot\left[ 2 W_{\bll}^{TS, (0,1)}(\br) W_{\bll}^{ST}(\br) - 2\textrm{sgn}\cdot W_{\bll}^{TS, (0,)}(\br)W_{\bll}^{ST, (0,)}(\br^t)\right]
+\end{split}
+\end{equation}
+(we also used there $\xi^{01}(\br) = \xi^{10}(\br) = \xi^{01}(\br^t)$ and $\xi^{00}(\br) = \xi^{11}(\br^t)$)
+We have then for the diagonal terms $T=S$, (since $W^{TT}$ real)
+\begin{equation}
+\begin{split}
+	n^{1} \ni	&\int d\br \: 2\xi^{00}(\br) \cdot \left[2W_{\bll}^{TT, (0, 0)}(\br) W_{\bll}^{TT}(\br)- 2 \left[W_{\bll}^{TT, (0,)}(\br)\right]^2\right] \\
+	+&\int d\br \: 2\xi^{01}(\br)\cdot\left[ 2 \Re\left[{W_{\bll}^{TS, (0,1)}}\right](\br) W_{\bll}^{TT}(\br) - 2\textrm{sgn}\cdot W_{\bll}^{TT, (0,)}(\br)W_{\bll}^{TT, (0,)}(\br^t)\right]
+	\end{split}
+\end{equation}
+This leads to $5$ rFFTs, so $3\times 5$ for the full MV diags. The off-diagonal $ST + TS $ contributions:
+\begin{equation}
+\begin{split}
+n^{1} \ni	&\int d\br \:2 \xi^{00}(\br)\left[ 4\Re \left[2W_{\bll}^{TS, (0, 0)}(\br) W_{\bll}^{ST}(\br)\right]- 4 W_{\bll}^{TS, (0,)}(\br)W_{\bll}^{ST, (0,)}(\br)\right] \\
+	+&\int d\br \: 2\xi^{01}(\br)\cdot\left[ 4\Re\left[ W_{\bll}^{TS, (0,1)}(\br) W_{\bll}^{ST}(\br)\right] - 4\textrm{sgn}\cdot W_{\bll}^{TS, (0,)}(\br)W_{\bll}^{ST, (0,)}(\br^t)\right]
+\end{split}
+\end{equation}
+This leads to $10 $ rFFTs, so $3\times 10$ for the full MV, so 45 total including the diagonal terms.
+
+\subsection{Others}
 The other matrices are: $R_{\bl}$ the transfer matrix from TEB to TQU:
 \begin{equation} R^{SX}_{\bl} = 
 	\begin{pmatrix}
@@ -124,44 +123,5 @@ and $(R^tR)^{XY}_{\bl_1\bl_2}$
 		\begin{pmatrix}
 		1 & 0 & 0 \\ 0 & \cos 2\phi_{\bl_1\bl_2}= c_1c_2 + s_1 s_2 & \sin 2\phi_{\bl_1\bl_2}= -c_1s_2 + s_1 c_2 \\ 0 & -\sin 2\phi_{\bl_1\bl_2}= c_1s_2 - s_1 c_2 & \cos 2\phi_{\bl_1\bl_2}= c_1c_2 + s_1 s_2
 	\end{pmatrix}_{XY}
-\end{equation}
-Since each $W_{\bll}^{ST}$ by construction is symmetric in $\bl_1 = \bl + \bll/2, \bl_2 = \bll /2 - \bl$, we have the following symmetries:
-\begin{equation}
-\begin{split}
-  W_{-\bll}^{ST, (,)} &= W_{+\bll}^{TS, (,)}\\
-	W_{-\bll}^{ST, (\alpha,\beta)} &= W_{+\bll}^{TS, (\beta,\alpha)}, \\
-	W_{-\bll}^{ST, (,\alpha)} &= -W_{+\bll}^{TS, (\alpha,)} \\
-	W_{+\bll}^{ST, (1,)}(r_0, r_1) &= \left( (-1)^{ (T=Q) + (S = Q)}\right)W_{+\bll}^{ST, (0,)}(r_1, r_0) \quad (\textrm{ no EB, TB, L }\propto (1,1))\\
-	\color{red}
-\textrm{a tester:} W^{QU}(\br) &= W^{UQ}(\br \textrm{ for real part of } \br^t \textrm{for imag}. W^{QQ}, W^{UU} \textrm{seems independent but are real})
-\color{black}
-\end{split}
-\end{equation}
-\newcommand{\real}[1]{ \Re {\left\{#1\right\}}}
-We have for Pol (note the QQ and UU terms is the same exact structure as TT and can be done in the same manner):
-\begin{equation}
-\boxed{
-\begin{split}
-	&2 \xi^{00} \left[ \left(QQ\right)_0^2 + \left(UU\right)_0^2 + 2\left(QU\right)_0\left(UQ\right)_0 \right] \\+ &2 \xi^{01}\left[ \left(QQ\right)_0\left(QQ\right)^t_0  + \left(UU\right)_0\left(UU\right)^t_0-2\left(QU\right)_0\left(UQ\right)^t_0 \right] \\
-	+& 2\xi^{00} \left[ (QQ)_{0,0}(QQ)  + (UU)_{0,0}(UU) + 2  \Re\left\{(QU)_{0,0}(UQ)\right\}\right] \\ +& \xi^{01} \left[ \real{(QQ)_{0,1}}(QQ)  + \real{(UU)_{0,1}}(UU) + 2  \real{(QU)_{0,1}(UQ)}\right]
-\end{split}}
-\end{equation}
-
-
-\subsection{curved-sky}
-On the curved-sky (for spin-0 fields only) one get something similar-looking:
-\begin{equation}
-\xi^{\phi\phi}(\hn_1,\hn_2) g^{12}_{LM}(\hn_1,\hn_2) g^{34}_{L,-M}(\hn_1,\hn_2) + ...
-\end{equation}
-where the $g$'s are
-\begin{equation}
-	g(\hn_1, \hn_2) = \int d\hn \:w^1(\hn_1, \hn)w^1(\hn_2, \hn) Y^\dagger_{LM}(\hn)
-\end{equation}
-or similar
-\color{red} This is not exactly the same as the flat-sky, there is some additional terms $e^{i \bll \cdot \hn_2}$ that cancels between the two g's unless I am wrong
-\color{black}
-The lensing gradient response is
-\begin{equation}
-	C_{\bl_1} \left( \bll \cdot \bl_1 \right) + C_{\bl_2} \left( \bll \cdot \bl_2 \right) = C_{l_1}\left( l_1^2  + l_{1x} l_{2x} + l_{1y} l_{2y}\right) + C_{l_2}\left( l_2^2  + l_{2x} l_{1x} + l_{2y} l_{1y}\right)
 \end{equation}
 \end{document}
