@@ -6,7 +6,7 @@ from lensitbiases.n1_fft import n1_fft
 def test_transpose(k, L):
     """This tests:
 
-        W_L^{ST, (1 0)}_{0} = W_L^{ST, (1 0)}_{1}.transpose() * (-1) ** (S == Q) * (-1) ** (T == Q)
+        W_L^{ST, (1 0)}_{0} = W_L^{ST, (1 0)}_{1}.transpose() *  parity * (-1) ** (S == Q) * (-1) ** (T == Q)
 
         Note:
             This symmetry conditions relies on no gradient-curl spectra (TB, EB) present
@@ -15,40 +15,51 @@ def test_transpose(k, L):
 
 
     Xs = []
-    if k in ['ptt', 'p']: Xs += ['T']
-    if k in ['p_p', 'p']: Xs += ['Q', 'U']
-    for jt_TP in [False] if k in ['ptt', 'p_p'] else [False, True]:
-        fals, cls_weights, cls_grad, cpp = prepare_cls(k, jt_TP=jt_TP)
+    if k in ['ptt', 'p', 'xtt', 'x']: Xs += ['T']
+    if k in ['p_p', 'p', 'x_p', 'x']: Xs += ['Q', 'U']
+    for jt_TP in [False] if k in ['ptt', 'p_p', 'xtt', 'x_p'] else [False, True]:
+        ivfs_cls, fals, cls_weights, cls_grad, cpp = prepare_cls(k, jt_TP=jt_TP)
         slib = n1_fft(fals, cls_weights, cls_grad, cpp)
-        slib._build_key('p_p', L)
-        for S in Xs:
+        slib._build_key(k, L)
+        for S in Xs:  # Tests W^{ST, (1,)} = sgn * W^{ST, (0,)}.transpose()
             for T in Xs:
-                WST_0 = np.fft.ifft2(slib._W_ST(T, S, verbose=False, ders_1=0))
-                WST_1 = np.fft.ifft2(slib._W_ST(T, S, verbose=False, ders_1=1))
-                sgn = (-1) ** (S == 'Q') *  (-1) ** (T == 'Q')
-                if not np.allclose(WST_1.transpose(),sgn * WST_0):
-                    print("NOK " + S + T + '_0 = ' +'%2s'%str(sgn) + S + T + '_1' + '  jTP' *jt_TP)
+                for d0,d1 in [(0, None), (0, 0), (0, 1)]:
+                    # Tests W^{ST, (1,)} = sgn * W^{ST, (0,)}.transpose()
+                    # Tests W^{ST, (1,1)} = sgn * W^{ST, (0,0)}.transpose()
+                    WST_0 = np.fft.ifft2(slib._W_ST(T, S, verbose=False, ders_1=d0, ders_2=d1))
+                    WST_1 = np.fft.ifft2(slib._W_ST(T, S, verbose=False, ders_1=1-d0, ders_2=None if d1 is None else 1-d1))
+                    sgn = (-1) ** (S == 'Q') *  (-1) ** (T == 'Q') * slib.parity
+                    if not np.allclose(WST_1.transpose(),sgn * WST_0):
+                        print(k + ": NOK " + S + T + '_0 = ' +'%2s x '%str(sgn) + S + T + '_1' + '  jTP' *jt_TP)
+                        return False
+                    else:
+                        print(k + ":  OK " + S + T + '_0 = ' +'%2s x '%str(sgn) + S + T + '_1' + '  jTP' *jt_TP)
+
+        for ST in ['QU', 'TQ', 'TU', 'UQ', 'QT', 'UT', 'TT', 'UU', 'QQ']:
+            S, T = ST
+            for a in [None]:
+                WST= np.fft.ifft2(slib._W_ST(S, T))
+                WTS= np.fft.ifft2(slib._W_ST(T, S))
+                sgn = - (-1) ** (S == 'Q') *  (-1) ** (T == 'Q') * slib.parity
+                real = WST.real - WTS.real
+                imag = WST.imag - sgn * WTS.transpose().imag
+
+                if np.allclose(real, np.zeros_like(real)):
+                    print(k + ":  OK   %s_00 = %s_00 for real part "%(S+T, T+S) + '  jTP' * jt_TP)
                 else:
-                    print(" OK " + S + T + '_0 = ' +'%2s'%str(sgn) + S + T + '_1' + '  jTP' *jt_TP)
-        if k in ['p_p', 'p']:
-            WQU_00= np.fft.ifft2(slib._W_ST('Q', 'U'))
-            WUQ_00= np.fft.ifft2(slib._W_ST('U', 'Q'))
-
-            real = WQU_00.real - WUQ_00.real
-            imag = WQU_00.imag - WUQ_00.transpose().imag
-
-            if np.allclose(real, np.zeros_like(real)):
-                print(" OK   QU_00 = UQ_00 for real part " + '  jTP' * jt_TP)
-            else:
-                print("NOK   QU_00 = UQ_00 for real part " + '  jTP' * jt_TP)
-
-            if np.allclose(imag, np.zeros_like(real)):
-                print(" OK   QU_00 = UQ_00.T for imag part " +  '  jTP' * jt_TP)
-            else:
-                print("NOK   QU_00 = UQ_00.T for imag part " + '  jTP' * jt_TP)
-
-
-
+                    print(k + ": NOK   %s_00 = %s_00 for real part "%(S+T, T+S) + '  jTP' * jt_TP)
+                    return False
+                if np.allclose(imag, np.zeros_like(real)):
+                    print(k+":  OK   %s_00 = parity * %s_00.T for imag part "%(S+T, T+S) +  '  jTP' * jt_TP)
+                else:
+                    print(k+": NOK   %s_00 = parity * %s_00.T for imag part "%(S+T, T+S) + '  jTP' * jt_TP)
+                    return False
+    return True
+assert(test_transpose('p', 100))
+assert(test_transpose('x', 100))
+assert(test_transpose('p', 101))
+assert(test_transpose('x', 101))
+print("YEAH")
 def rfft_map_building_pol():
     k = 'p_p'
     jt_TP = False
@@ -100,9 +111,7 @@ def test_symmetries():
         - W_{-L}^{ST} = W_{+L}^{TS} for all T, S and all weights (because of changing l sign is same as swapping l1 and l2)
         - W_{-L}^{ST, (0, 1)} = (-1) W_{+L}^{TS, (1, 0)} for all T, S and MV weights
     """
-    from lensitbiases import _n1_ptt, utils_n1
-    import os
-    from plancklens import utils
+    from lensitbiases import _n1_ptt
 
     L = 299.
     for jt_TP in [False, True]:
