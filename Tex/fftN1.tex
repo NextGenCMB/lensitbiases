@@ -119,6 +119,18 @@ n^{1} \ni	&\int d\br \:2 \xi^{00}(\br)\left[ 4\Re \left[2W_{\bll}^{TS, (0, 0)}(\
 \end{equation}
 This leads to $10 $ rFFTs, so $3\times 10$ for the full MV, so 45 total including the diagonal terms.
 
+\subsection{Derivatives}
+\subsection{$C_L^{\phi\phi}$}
+Trivial
+\subsection{$C_\ell^{XY}$}
+Let's consider derivatives w.r.t. $C^{f, ST}_{\bl}$ first.  We must have $\bll/2 + \bl'$ matching $\bl$ hence
+\begin{equation}
+	\frac{\partial W_{\bll}^{S'T', (\alpha,)}}{\partial C_\ell^{ST}}(\br) = N\delta_{SS'}i\bl_\alpha W^{TT'}_{\bl, \bll-\bl}e^{i \br \left(\bl - \bll/2 \right)}
+\end{equation}
+with some trivial normalization $N$ that I have not figured out properly just now. This means we can get the derivatives for all $\bl$'s with FFT's as well. Likewise
+\begin{equation}
+		\frac{\partial W_{\bll}^{S'T', (\alpha, \beta)}}{\partial C_{\bl}^{ST}}(\br) = N\delta_{SS'}i\bl_\alpha W^{TT', (,\beta)}_{\bl, \bll-\bl}e^{i \br \left(\bl - \bll/2 \right)} + N \delta_{TT'} i\bl_\beta W^{S'S, (\alpha,)}_{\bll-\bl, \bl} e^{-i\br(\bl -\bll/2)}
+\end{equation}
 \subsection{Others}
 The other matrices are: $R_{\bl}$ the transfer matrix from TEB to TQU:
 \begin{equation} R^{SX}_{\bl} = 
