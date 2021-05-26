@@ -164,7 +164,7 @@ class n1_fft:
         """Shifts frequencies in both directions
 
             Returns:
-                frequency maps k_y - L/root(2), k_x - L/root(2)
+                frequency maps k_y - L/root(2), k_x - L/root(2)  (in grid units)
 
         """
         npix = self.box.shape[0]
@@ -172,23 +172,37 @@ class n1_fft:
         ns_y = (npix // 2 + self.box.ny_1d - (L / np.sqrt(2.) / self.box.lminbox)) % npix - npix // 2
         return np.meshgrid(ns_y, ns_y[:self.box.rshape[1]] if rfft else ns_y, indexing='ij')
 
+    def _build_key(self, k, L, rfft=False, w=0.5, sgn=1):
+        """
+            Args:
+                k: quadratic estimator key
+                L: lensing multipole
+                rfft: arrays are rfft2 shaped if True fft2 shaped if not
+                w: the l1 and l2 arrays are l1 = l + L * w, l2 = L (1 - w) - l
+                    e.g. w = 1/2 gives L/2 + l, L/2- l (default),
+                         w =  0 gives l,  L - l
+                         w =  1 gives l + L, -l
 
-    def _build_key(self, k, L, rfft=False):
-        self.l1s =  np.array(self._get_shifted_lylx_sym(-L * 0.5, rfft=rfft))  # this is q + L/2
-        self.l2s = -np.array(self._get_shifted_lylx_sym (L * 0.5, rfft=rfft))  # this is -(q - L/2) = L/2 - q
+            Note:
+                vector L always prop to (1, 1)
+
+
+        """
+        self.l1s =  sgn * np.array(self._get_shifted_lylx_sym(-L * w * sgn, rfft=rfft))         # this is  sgn( q + sgn * w L)) = sgn q + w L
+        self.l2s = - sgn * np.array(self._get_shifted_lylx_sym (L * (1. - w) *sgn, rfft=rfft))  # this is -sgn( q - sgn * L (1 - w)) = -sgn * q + L * (1 - w)
         self.l1_int = self.box.rsqd2l(np.sum(self.l1s ** 2, axis=0))
         self.l2_int = self.box.rsqd2l(np.sum(self.l2s ** 2, axis=0))
-        # For curl estimator must replace i (Lx ly) by i (-Ly Lx)
-        # In principle we have l1 + l2 = (L/root(2), L/root(2)) but lets keep it explicit
+
         if k[0] == 'p':
-            self.Ll1 = np.sum((self.l1s + self.l2s) * self.l1s, axis=0)
-            self.Ll2 = np.sum((self.l1s + self.l2s) * self.l2s, axis=0)
+            Lr2 = L / np.sqrt(2.) / self.box.lminbox
+            self.Ll1 = np.sum(self.l1s, axis=0) * Lr2  #  L \cdot l_1. Assumes \bL = (L, L) / root(2)
+            self.Ll2 = np.sum(self.l2s, axis=0) * Lr2  #  L \cdot l_2. Idem
             self.xy_sym = 1
         elif k[0] == 'x':
-            self.Ll1 = -(self.l1s + self.l2s)[1] * self.l1s[0] + (self.l1s + self.l2s)[0] * self.l1s[1]
-            self.Ll2 = -(self.l1s + self.l2s)[1] * self.l2s[0] + (self.l1s + self.l2s)[0] * self.l2s[1]
+            Lr2 = L / np.sqrt(2.) / self.box.lminbox
+            self.Ll1 = (-self.l1s[0] + self.l1s[1]) * Lr2 #  L \cdot l_1. Assumes \bL = (L, L) / root(2)
+            self.Ll2 = (-self.l2s[0] + self.l2s[1]) * Lr2 #  L \cdot l_2. Idem
             self.xy_sym = -1
-
         elif k[0] == 'f':
             self.Ll1 = 1.
             self.Ll2 = 1.
@@ -203,7 +217,6 @@ class n1_fft:
             sin2p = 2 * dotp * (l2s[1] * l1s[0] - l2s[0] * l1s[1]) / r1sqd_r2sqd
             self._cos2p_sin2p = (cos2p, sin2p)
             self._cos2p_sin2p_v1 = {1: self._get_cos2p_sin2p(l1s), 2: self._get_cos2p_sin2p(l2s)}
-
 
     def _destroy_key(self, k):
         self.l1s = None
@@ -270,73 +283,56 @@ class n1_fft:
             return self.cos2p_sin2p_2v()[0] # same as c1 * c1 + s1 * s2 = cos2p_12
         return (1 if X == 'B' else -1) * self.cos2p_sin2p_2v()[1]# same as -+ (c1 s2 - s1 c2) = -+ sin_2p_12:
 
-
     def _W_SS_diag(self, S, verbose=False):
         """ Builds all W_SS terms needed for a diagonal piece
 
+
         """
-        s = self.l1_int.shape
-
+        #FIXME: unnecessary XYZpYps for sep-TP etc
+        if S == 'T':
+            XYXpYps = ['TTTT','TEET']
+        elif S in ['Q', 'U']:
+            XYXpYps = ['ETTE','EEEE', 'EEBB', 'BBEE', 'BBBB']
+        else:
+            assert 0
+        W1s = np.zeros((5, self.l1_int.shape[0], self.l1_int.shape[1]), dtype=float)
+        W2s = np.zeros((5, self.l1_int.shape[0], self.l1_int.shape[1]), dtype=float)
         X2i = {'T': 0, 'E': 1, 'B': 2}
-        W1_SS = np.zeros(s, dtype=float)
-        W2_SS = np.zeros(s, dtype=float)
-        W1_SS_0z = np.zeros(s, dtype=float)
-        W2_SS_0z = np.zeros(s, dtype=float)
-        W1_SS_z0 = np.zeros(s, dtype=float)
-        W2_SS_z0 = np.zeros(s, dtype=float)
-        W1_SS_00 = np.zeros(s, dtype=float)
-        W2_SS_00 = np.zeros(s, dtype=float)
-        W1_SS_01 = np.zeros(s, dtype=float)
-        W2_SS_01 = np.zeros(s, dtype=float)
+        for X, Y, Xp, Yp in XYXpYps:
+            iX, iY, iXp, iYp = [X2i[Z] for Z in [X, Y, Xp, Yp]]
+            cl_XY_1     = self.Fw_ls    [iX, iY]
+            cl_XY_2     = self.F_ls     [iX, iY]
+            cl_XY_1_0   = self.fFw_ls   [iX, iY]
+            cl_XY_2_0   = self.fF_ls    [iX, iY]
+            cl_XpYp_1   = self.F_ls     [iXp, iYp]
+            cl_XpYp_2   = self.wF_ls    [iXp, iYp]
+            cl_XpYp_1_0 = self.Ff_ls    [iXp, iYp]
+            cl_XpYp_2_0 = self.wFf_ls   [iXp, iYp]
 
-        for X in ['T'] if S == 'T' else ['E', 'B']:
-            # RSX_1 = self._X2S(S, X, 1)
-            # for Y in ['E', 'B']: # Assuming no EB and BE, Y must be X
-            # S XY XY' S   ->
-            for Y in ['B'] if X == 'B' else ['T', 'E']:  # could restrict this is sep-TP configuration
-                cl_XY_1 = self.Fw_ls[X2i[X], X2i[Y]]
-                cl_XY_2 = self.F_ls[X2i[X], X2i[Y]]
-                cl_XY_1_0 = self.fFw_ls[X2i[X], X2i[Y]]
-                cl_XY_2_0 = self.fF_ls[X2i[X], X2i[Y]]
-                for Xp in ['T'] if Y == 'T' else ['E', 'B']:
-                    RtR_YXp = self._X2Y(Y, Xp)
-                    # for Yp in ['E', 'B']: # Assuming no EB and BE, Yp must be Xp
-                    for Yp in ['B'] * (S != 'T') if Xp == 'B' else (['T'] if S == 'T' else ['E']):
-                        if verbose:
-                            print(X+ Y + ' ' + Xp + Yp)
-                        cl_XpYp_1 = self.F_ls[X2i[Xp], X2i[Yp]]
-                        cl_XpYp_2 = self.wF_ls[X2i[Xp], X2i[Yp]]
-                        cl_XpYp_1_0 = self.Ff_ls[X2i[Xp], X2i[Yp]]
-                        cl_XpYp_2_0 = self.wFf_ls[X2i[Xp], X2i[Yp]]
-
-                        toSS_RtR = self._X2S(S, X, 1) * self._X2S(S, Yp, 2) * RtR_YXp
-                        # terms without any response weight:
-                        W1_SS += toSS_RtR * cl_XY_1[self.l1_int] * cl_XpYp_1[self.l2_int]
-                        W2_SS += toSS_RtR * cl_XY_2[self.l1_int] * cl_XpYp_2[self.l2_int]
-                        # ==== terms with one derivatives (need both re and im)
-                        W1_SS_0z += toSS_RtR * cl_XY_1_0[self.l1_int] * cl_XpYp_1[self.l2_int] * self.l1s[0]
-                        W2_SS_0z += toSS_RtR * cl_XY_2_0[self.l1_int] * cl_XpYp_2[self.l2_int] * self.l1s[0]
-                        W1_SS_z0 += toSS_RtR * cl_XY_1[self.l1_int] * cl_XpYp_1_0[self.l2_int] * self.l2s[0]
-                        W2_SS_z0 += toSS_RtR * cl_XY_2[self.l1_int] * cl_XpYp_2_0[self.l2_int] * self.l2s[0]
-                        # ==== terms with two derivatives : 00 (real)
-                        term1 = toSS_RtR * cl_XY_1_0[self.l1_int] * cl_XpYp_1_0[self.l2_int]
-                        term2 = toSS_RtR * cl_XY_2_0[self.l1_int] * cl_XpYp_2_0[self.l2_int]
-                        W1_SS_00 += term1 * self.l1s[0] * self.l2s[0]
-                        W2_SS_00 += term2 * self.l1s[0] * self.l2s[0]
-                        # ==== terms with two derivatives : 01 (cmplx, need the real part)
-                        W1_SS_01 += term1 * (self.l1s[0] * self.l2s[1] + self.l1s[1] * self.l2s[0])
-                        W2_SS_01 += term2 * (self.l1s[0] * self.l2s[1] + self.l1s[1] * self.l2s[0])
+            toSS_RtR = self._X2S(S, X, 1) * self._X2S(S, Yp, 2) * self._X2Y(Y, Xp)
+            # terms without any response weight:
+            W1s[0] += toSS_RtR * cl_XY_1[self.l1_int] * cl_XpYp_1[self.l2_int]  # W1_SS
+            W2s[0] += toSS_RtR * cl_XY_2[self.l1_int] * cl_XpYp_2[self.l2_int]  # W1_SS
+            # ==== terms with one derivatives (need both re and im)
+            W1s[1] += toSS_RtR * cl_XY_1_0[self.l1_int] * cl_XpYp_1[self.l2_int] * self.l1s[0] # W1_SS_0z
+            W2s[1] += toSS_RtR * cl_XY_2_0[self.l1_int] * cl_XpYp_2[self.l2_int] * self.l1s[0] # W2_SS_0z
+            W1s[2] += toSS_RtR * cl_XY_1[self.l1_int] * cl_XpYp_1_0[self.l2_int] * self.l2s[0] # W1_SS_z0
+            W2s[2] += toSS_RtR * cl_XY_2[self.l1_int] * cl_XpYp_2_0[self.l2_int] * self.l2s[0] # W2_SS_0z
+            # ==== terms with two derivatives : 00 (real), and 01 (cmplx, need the real part)
+            term1 = toSS_RtR * cl_XY_1_0[self.l1_int] * cl_XpYp_1_0[self.l2_int]
+            term2 = toSS_RtR * cl_XY_2_0[self.l1_int] * cl_XpYp_2_0[self.l2_int]
+            W1s[3] += term1 *  self.l1s[0] * self.l2s[0]  # W1_SS_00
+            W2s[3] += term2 *  self.l1s[0] * self.l2s[0]  # W2_SS_00
+            W1s[4] += term1 * (self.l1s[0] * self.l2s[1] + self.l1s[1] * self.l2s[0]) # W1_SS_01
+            W2s[4] += term2 * (self.l1s[0] * self.l2s[1] + self.l1s[1] * self.l2s[0]) # W2_SS_01
 
 
-        for W in [W1_SS, W1_SS_00, W1_SS_z0, W1_SS_0z, W1_SS_01]:
-            W *= self.Ll1
-        for W in [W2_SS, W2_SS_00, W2_SS_z0, W2_SS_0z, W2_SS_01]:
-            W *= self.Ll2
-        SS = (W1_SS + W2_SS).astype(complex)
-        SS_00 = (-1) * (W1_SS_00 + W2_SS_00).astype(complex)
-        SS_01_re = (-1 * 0.5) *(W1_SS_01 + W2_SS_01).astype(complex)
-        SS_0z_re =  (   0.5 * 1j) * ( (W1_SS_0z + W2_SS_0z) -  (W1_SS_z0 + W2_SS_z0))  # SS,(0, ), real part
-        SS_0z_im =  (   0.5 * 1.) * ( (W1_SS_0z + W2_SS_0z) +  (W1_SS_z0 + W2_SS_z0))  # SS,(0, ), im part
+        Ws = W1s * self.Ll1 + W2s * self.Ll2
+        SS       =                Ws[0]
+        SS_0z_re =  (0.5 * 1j) * (Ws[1] -  Ws[2])  # SS,(0, ), real part
+        SS_0z_im =  (0.5 * 1.) * (Ws[1] +  Ws[2])  # SS,(0, ), im part
+        SS_00    =  (-1)       *  Ws[3]
+        SS_01_re =  (-1 * 0.5) *  Ws[4]
         return SS, SS_00, SS_01_re, SS_0z_re, SS_0z_im
 
     def _W_TS_odiag(self, T, S, verbose=False):
@@ -381,7 +377,6 @@ class n1_fft:
             cl_XY_1_0 = self.fFw_ls[X2i[X], X2i[Y]]
             cl_XY_2_0 = self.fF_ls[X2i[X], X2i[Y]]
 
-            RtR_YXp = self._X2Y(Y, Xp)
 
             cl_XpYp_1 = self.F_ls[X2i[Xp], X2i[Yp]]
             cl_XpYp_2 = self.wF_ls[X2i[Xp], X2i[Yp]]
@@ -393,6 +388,7 @@ class n1_fft:
             TSpST = toTS + toST
             TSmST = toTS - toST
             # terms without any response weight:
+            RtR_YXp = self._X2Y(Y, Xp)
             term1 = RtR_YXp * cl_XY_1[self.l1_int] * cl_XpYp_1[self.l2_int]
             term2 = RtR_YXp * cl_XY_2[self.l1_int] * cl_XpYp_2[self.l2_int]
 
@@ -441,10 +437,10 @@ class n1_fft:
         for W in [W2, W2_01, W2_10, W2_TS_0z, W2_TS_z0, W2_ST_z0, W2_ST_0z]:
             W *= self.Ll2
         #i_sign = 1j ** (ders_1 is not None) * 1j ** (ders_2 is not None)
-        W_re =  0.5  * (W1[0] + W2[0]).astype(complex)
-        W_im = -0.5j * (W1[1] + W2[1])
-        W00_re = - 0.5  * (W1[2] + W2[2]).astype(complex)
-        W00_im = + 0.5j * (W1[3] + W2[3])
+        W_re =         0.5  * (W1[0] + W2[0]).astype(complex)
+        W_im =        -0.5j * (W1[1] + W2[1])
+        W00_re =      -0.5  * (W1[2] + W2[2]).astype(complex)
+        W00_im =      +0.5j * (W1[3] + W2[3])
         W_0z_re =  (   0.5 * 1j) * ( (W1_TS_0z + W2_TS_0z) -  (W1_ST_z0 + W2_ST_z0))  # TS,(0, ), real part
         W_0z_im =  (   0.5 * 1.) * ( (W1_TS_0z + W2_TS_0z) +  (W1_ST_z0 + W2_ST_z0))  # TS,(0, ), im part
         W_z0_re =  (   0.5 * 1j) * ( (W1_TS_z0 + W2_TS_z0) -  (W1_ST_0z + W2_ST_0z))  # TS,(,0), real part
@@ -653,7 +649,6 @@ class n1_fft:
         W2 = np.zeros(self.l1_int.shape, dtype=float)  # terms of QE with Cl weight on l2 leg
         X2i = {'T' : 0, 'E' : 1, 'B' : 2}
         for X, Y, Xp, Yp in XYXpYps:
-            Rsfac =  self._X2S(S, X, 1) * self._X2Y(Y, Xp) * self._X2S(T, Yp, 2)
             if ders_1 is not None:
                 cl_XY_1 = self.fFw_ls[X2i[X], X2i[Y]]
                 cl_XY_2 = self.fF_ls[ X2i[X], X2i[Y]]
@@ -667,6 +662,7 @@ class n1_fft:
                 cl_XpYp_1 =  self.F_ls[ X2i[Xp], X2i[Yp]]
                 cl_XpYp_2 =  self.wF_ls[X2i[Xp], X2i[Yp]]
 
+            Rsfac =  self._X2S(S, X, 1) * self._X2Y(Y, Xp) * self._X2S(T, Yp, 2)
             term1 = Rsfac * cl_XY_1[self.l1_int] * cl_XpYp_1[self.l2_int]
             term2 = Rsfac * cl_XY_2[self.l1_int] * cl_XpYp_2[self.l2_int]
             if ders_1 is not None:

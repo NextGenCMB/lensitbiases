@@ -38,23 +38,24 @@ class cmbconf:
         ivfs_cls_ss, fals = get_ivf_cls(cls_cmblen_sims, cls_cmbfilt, self.lmin, self.lmax, self.nlevt, self.nlevp, self.nlevt, self.nlevp,
                              self.transf, jt_tp=jt_TP)
         # NB: fals does not depend on data part of the inputs
-        if k == 'ptt':
+        if 'te' in fals.keys() and not jt_TP:
+            fals['te'] *= 0.
+        if k == 'ptt' and not jt_TP:
             fals['ee'] *= 0.
             fals['bb'] *= 0.
             ivfs_cls_dd['ee'] *= 0.
             ivfs_cls_dd['bb'] *= 0.
             ivfs_cls_ss['ee'] *= 0.
             ivfs_cls_ss['bb'] *= 0.
-        if k == 'p_p':
+        if k == 'p_p' and not jt_TP:
             fals['tt'] *= 0.
             ivfs_cls_dd['tt'] *= 0.
             ivfs_cls_dd['te'] *= 0.
             ivfs_cls_ss['tt'] *= 0.
             ivfs_cls_ss['te'] *= 0.
-            if 'te' in fals.keys():
-                fals['te'] *= 0.
         if k in ['ptt', 'p_p']:
             cls_qeweight['te'] *= 0.
+
 
 
         self.cls_unl = cls_cmblunl

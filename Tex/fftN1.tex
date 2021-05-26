@@ -125,9 +125,17 @@ Trivial
 \subsection{$C_\ell^{XY}$}
 Let's consider derivatives w.r.t. $C^{f, ST}_{\bl}$ first.  We must have $\bll/2 + \bl'$ matching $\bl$ hence
 \begin{equation}
-	\frac{\partial W_{\bll}^{S'T', (\alpha,)}}{\partial C_\ell^{ST}}(\br) = N\delta_{SS'}i\bl_\alpha W^{TT'}_{\bl, \bll-\bl}e^{i \br \left(\bl - \bll/2 \right)}
+	\frac{\partial W_{\bll}^{S'T', (\alpha,)}}{\partial C_{\bl}^{f, ST}}(\br) = N\delta_{SS'}i\bl_\alpha W^{TT'}_{\bl, \bll-\bl}e^{i \br \left(\bl - \bll/2 \right)}
 \end{equation}
-with some trivial normalization $N$ that I have not figured out properly just now. This means we can get the derivatives for all $\bl$'s with FFT's as well. Likewise
+with some trivial normalization $N$ that I have not figured out properly just now. This means we can get the derivatives for all $\bl$'s with FFT's as well. 
+If we look at the $(\alpha,) \cdot (\beta,)$ term, we get
+\begin{equation}
+\begin{split}
+&\sum_{S'T'} -2 \xi^{\alpha\beta}(\br)W_{\bll}^{S'T',(\alpha,)}(\br)W_{\bll}^{T'S',(\beta,)}(\br) \\ &\rightarrow 2N \sum_{T'} i\bl_\alpha W^{TT'}_{\bl, \bll - \bl} \left[W_{\bll}^{T'S, (\beta,)} \xi^{\alpha \beta}\right ]_{\bll/2 - \bl}  +2N\sum_{S'}\left[W_{\bll}^{S'S, (\alpha,)} \xi^{\alpha \beta}\right ]_{\bll/2 - \bl}  i\bl_\beta W^{TS'}_{\bl, \bll - \bl} \\
+&= 2 N \sum_{T'} W^{TT'}_{\bl, \bll - \bl} \left[  \left(i\bl_\alpha W_{\bll}^{T'S, (\beta,)}(\br) + i\bl_\beta W_{\bll}^{T'S, (\alpha,)}(\br) \right )  \xi^{\alpha \beta}(\br)\right]_{\bll/2 - \bl}
+\end{split}
+\end{equation}
+Likewise
 \begin{equation}
 		\frac{\partial W_{\bll}^{S'T', (\alpha, \beta)}}{\partial C_{\bl}^{ST}}(\br) = N\delta_{SS'}i\bl_\alpha W^{TT', (,\beta)}_{\bl, \bll-\bl}e^{i \br \left(\bl - \bll/2 \right)} + N \delta_{TT'} i\bl_\beta W^{S'S, (\alpha,)}_{\bll-\bl, \bl} e^{-i\br(\bl -\bll/2)}
 \end{equation}
