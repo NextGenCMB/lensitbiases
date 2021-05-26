@@ -53,13 +53,14 @@ class cmbconf:
             ivfs_cls_dd['te'] *= 0.
             ivfs_cls_ss['tt'] *= 0.
             ivfs_cls_ss['te'] *= 0.
-        if k in ['ptt', 'p_p']:
-            cls_qeweight['te'] *= 0.
+
 
 
 
         self.cls_unl = cls_cmblunl
-        self.cls_w = cls_qeweight
+        self.cls_w = {k : np.copy(cls_qeweight[k]) for k in cls_qeweight.keys()}
+        if k in ['ptt', 'p_p'] and 'te' in cls_qeweight.keys():
+            self.cls_w['te'] *= 0.
         self.cls_f = cls_cmbresponse
         self.fals = fals
         self.ivfs_cls_dd = ivfs_cls_dd

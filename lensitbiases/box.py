@@ -103,13 +103,17 @@ class box:
         return nl
 
     def sum_in_l(self, weights):
-        assert weights.shape == self.rshape, (weights.shape, self.rshape)
-        shape = self.shape
-        rshape = self.rshape
-        ls = self.ls()
-        cl = np.bincount(ls[:, 1:rshape[1] - 1].flatten(), weights=weights[:, 1:rshape[1] - 1].flatten(), minlength=self.lmaxbox+ 1)
-        cl += np.bincount(ls[0:shape[0] // 2 + 1, [-1, 0]].flatten(), weights=weights[0:shape[0] // 2 + 1, [-1, 0]].flatten(), minlength=self.lmaxbox + 1)
-        return cl * self.mode_counts() * cli(self._get_lcounts())
+        assert weights.shape in (self.rshape, self.shape), (weights.shape, self.rshape,self.shape)
+        if weights.shape == self.rshape:
+            shape = self.shape
+            rshape = self.rshape
+            ls = self.ls()
+            cl = np.bincount(ls[:, 1:rshape[1] - 1].flatten(), weights=weights[:, 1:rshape[1] - 1].flatten(), minlength=self.lmaxbox+ 1)
+            cl += np.bincount(ls[0:shape[0] // 2 + 1, [-1, 0]].flatten(), weights=weights[0:shape[0] // 2 + 1, [-1, 0]].flatten(), minlength=self.lmaxbox + 1)
+            return cl * self.mode_counts() * cli(self._get_lcounts())
+        elif weights.shape == self.shape:
+            cl = np.bincount(self.ls(rfft=False).flatten(), weights=weights.flatten(), minlength=self.lmaxbox+ 1)
+            return cl
 
     def map2cl(self,m, lmax=None):
         assert m.shape == self.shape, (m.shape, self.shape)
