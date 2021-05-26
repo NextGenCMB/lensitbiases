@@ -147,6 +147,12 @@ class n1_fft:
         ifft2 = pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
         return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
 
+    def _ifft2(self, rm):
+        oshape = self.box.shape if rm.ndim == 2 else (rm.shape[0], self.box.shape[0], self.box.shape[1])
+        inpt = pyfftw.empty_aligned(rm.shape, dtype='complex128')
+        outp = pyfftw.empty_aligned(oshape, dtype='complex128')
+        ifft2 = pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
+        return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
 
     @staticmethod
     def _get_cos2p_sin2p(ls):
@@ -700,6 +706,72 @@ class n1_fft:
         term_00 =  2 * (SS * SS_00    - (SS_0z_re ** 2  - SS_0z_im ** 2))
         term_01 =  2 * (SS * SS_01_re - self.xy_sym * (SS_0z_re * SS_0z_re.T - SS_0z_im * SS_0z_im.T))
         return np.array([term_00, term_01])
+
+    def get_dn1(self, k, L, _optimize=0):
+        """Returns matrices dn1 / dCMBspectra for spec TT TE EE BB
+
+                For Cpp derivatives, use the get_n1 routine
+
+        """
+        Tps =['T', 'Q', 'U']
+        Ts = ['T', 'Q', 'U']
+        Ss = ['T', 'Q', 'U']
+        TS = ['TT', 'TQ', 'TU','QT', 'QQ', 'QU', 'UU', 'UQ', 'UT']
+        dcls =  {T+S: np.zeros(self.box.shape, dtype=float) for T, S in TS}
+
+        in0, in1 = np.meshgrid(self.box.ny_1d, self.box.ny_1d, indexing='ij')
+        in0 = in0 * 1j
+        in1 = in1 * 1j
+        if _optimize==0:
+            WTTp_zz = {}
+            WTTp_z1 = {}
+            WTTp_z0 = {}
+
+            self._destroy_key(k)
+            self._build_key(k, L, rfft=False, w=0. + 1e-10, sgn=1)
+            for T in Ts:
+                for Tp in Tps:
+                    WTTp_zz[T + Tp] = self._W_ST(T, Tp) # could use symmetry here
+                    WTTp_z1[T + Tp] = self._W_ST(T, Tp, ders_2=1)
+                    WTTp_z0[T + Tp] = self._W_ST(T, Tp, ders_2=0) # could spare the ila and feed it in by end
+            self._destroy_key(k)
+            self._build_key(k, L, rfft=False, w=1. - 1e-10, sgn=1)
+            for Tp in Tps:  # accumulate func to FFT
+                for S in Ss:
+                    WTpSr_0z = self._ifft2(self._W_ST(Tp, S, ders_1=0))
+                    WTpSr = self._ifft2(self._W_ST(Tp, S)) # could use that for S, Tp W is just a conj()
+                    WTpSr_0z_xipp0 = self._ifft2(WTpSr_0z * self.xipp[0])
+                    WTpSr_0z_xipp1 = self._ifft2(WTpSr_0z * self.xipp[1])
+                    WTpSr_xipp0 = self._ifft2(WTpSr * self.xipp[0])
+                    WTpSr_xipp1 = self._ifft2(WTpSr * self.xipp[1])
+                    sgn = (-1) ** (Tp == 'Q') * (-1) ** (S == 'Q') #No flip sym sign since this is product of TTp and TS
+                    #sgn_TTp = self.xy_sym * (-1) ** (T == 'Q') * (-1) ** (Tp == 'Q')
+                    #sgn_TS = self.xy_sym * (-1) ** (T == 'Q') * (-1) ** (S == 'Q')
+                    for T in Ts:
+                        add_ST  = in1 * WTTp_zz[T + Tp] * WTpSr_0z_xipp1 + in0 * WTTp_zz[T + Tp] * WTpSr_0z_xipp0
+                        add_ST += sgn * add_ST.T
+                        dcls[S + T] -= 2 * add_ST.real
+                        add_ST =  in0 * WTTp_z0[T + Tp] * WTpSr_xipp0
+                        add_ST += sgn * add_ST.T
+                        add_ST += 2 * in0 * WTTp_z1[T + Tp] * WTpSr_xipp1
+                        dcls[S + T]  += add_ST.real
+                        dcls[T + S]  += add_ST.real
+        else:
+            assert 0, _optimize
+        # Turn ST onto XY spectra:
+        self._destroy_key(k)
+        self._build_key(k, L, rfft=False, w=0. + 1e-10, sgn=1)
+        dN1 = {'tt' : self.box.sum_in_l(dcls['TT'])}
+        for spec, Ss in zip(['TE', 'EE', 'BB'], [['T', 'Q', 'U'], ['Q', 'U'], ['Q', 'U']]):
+            X, Y = spec
+            dN = np.zeros(self.box.shape, dtype=float)
+            for S in Ss:
+                for T in Ss:
+                    dN += self._X2S(S, X, 1) * self._X2S(T, Y, 1) * dcls[S + T]
+            dN1[spec.lower()] = self.box.sum_in_l(dN)
+        for dcl in dN1.values():
+            dcl *= -self.norm * 2 * 0.25
+        return dN1
 
     def get_n1(self, k, L, do_n1mat=True, _optimize=2, _pyfftw=True):
         L = float(L)
