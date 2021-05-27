@@ -136,14 +136,24 @@ If we look at the $(\alpha,) \cdot (\beta,)$ term, we get
 \end{split}
 \end{equation}
 The two terms are identical. We have
-\begin{equation} \boxed{
-4 W^{TT'}_{\bl, \bll - \bl}	i \bl_\alpha \left[ _{11}W^{T'S, (,\beta)}_{\bll}(\br) \xi^{\alpha \beta}(\br) e^{i \bl \br}\right]}
+\begin{equation} 
+4 W^{TT'}_{\bl, \bll - \bl}	i \bl_\alpha \left[ _{11}W^{T'S, (,\beta)}_{\bll}(\br) \xi^{\alpha \beta}(\br) e^{i \bl \br}\right]
 \end{equation}
 The $_{11}$ subscript means the $\bl_1,\bl_2$ splits in $W$ is $+1\bl + 1\bll, \bl $, done to absorb the $\bll/2$ inside the integral.
 
 Likewise
 \begin{equation}
 		\frac{\partial W_{\bll}^{S'T', (\alpha, \beta)}}{\partial C_{\bl}^{ST}}(\br) = N\delta_{SS'}i\bl_\alpha W^{TT', (,\beta)}_{\bl, \bll-\bl}e^{i \br \left(\bl - \bll/2 \right)} + N \delta_{TT'} i\bl_\beta W^{S'S, (\alpha,)}_{\bll-\bl, \bl} e^{-i\br(\bl -\bll/2)}
+\end{equation}
+Summing up, one gets this (sums overs $T,S, T')$
+\begin{equation}
+\begin{split}
+		&-4 W^{TT'}_{\bl, \bll - \bl} i\bl^1 \left(_{11}W^{T'S, (0,)} \xi^{01} \right)_{-\bl} + (-1)^{T==Q}(-1)^{S==Q}\cdot\textrm{ same,  transposed}. \\
+		&-4 W^{TT'}_{\bl, \bll - \bl} i\bl^0 \left(_{11}W^{T'S, (0,)} \xi^{00} \right)_{-\bl} + (-1)^{T==Q}(-1)^{S==Q}\textrm{ same, transposed}. \\
+		&+2 W^{TT'(,1)}_{\bl, \bll - \bl} i \bl^0 \left( _{11}W^{T'S}\xi^{01}\right)_{-\bl}  + \textrm{ exact same} \\
+		 &+ 2W^{TT'(,0)}_{\bl, \bll - \bl} i \bl^0 \left( _{11}W^{T'S}\xi^{00} \right)  + (-1)^{T==Q}(-1)^{S==Q}\textrm{ same, transposed}\\
+		 &+ (\textrm{last two lines, switching } (S \leftrightarrow T)
+\end{split}
 \end{equation}
 \subsection{Others}
 The other matrices are: $R_{\bl}$ the transfer matrix from TEB to TQU:

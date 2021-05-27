@@ -14,7 +14,7 @@ cls_unl = camb_clfile(os.path.join(path, 'FFP10_wdipole_lenspotentialCls.dat'))
 cls_weights = camb_clfile(os.path.join(path, 'FFP10_wdipole_lensedCls.dat'))
 import healpy as hp
 
-k = 'p_p'
+k = 'p'
 jt_TP = k in ['p', 'x']
 cf = wli.cmbconf(k.replace('x', 'p'), jt_TP, 35., 55., hp.gauss_beam(6. / 180. / 60. * np.pi, lmax=2048), 100, 2048, cls_cmbresponse=cls_len, cls_qeweight=cls_len)
 
@@ -28,6 +28,7 @@ Ls = np.linspace(50, 2048, 40)
 lmax = 2048
 dnmat = np.zeros((len(Ls), 4, lmax + 1), dtype=float)
 
+dn = n1_lib.get_dn1(k, Ls[0]) # fftw planning
 t0 = time()
 for iL, L in enumerate(Ls):
     dn = n1_lib.get_dn1(k, L)

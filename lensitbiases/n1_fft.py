@@ -728,14 +728,14 @@ class n1_fft:
             WTTp_z0 = {}
 
             self._destroy_key(k)
-            self._build_key(k, L, rfft=False, w=0. + 1e-10, sgn=1)
+            self._build_key(k, L, rfft=False, w=0. + 1e-12, sgn=1)
             for T in Ts:
                 for Tp in Tps:
                     WTTp_zz[T + Tp] = self._W_ST(T, Tp) # could use symmetry here
                     WTTp_z1[T + Tp] = self._W_ST(T, Tp, ders_2=1)
                     WTTp_z0[T + Tp] = self._W_ST(T, Tp, ders_2=0) # could spare the ila and feed it in by end
             self._destroy_key(k)
-            self._build_key(k, L, rfft=False, w=1. - 1e-10, sgn=1)
+            self._build_key(k, L, rfft=False, w=1. - 1e-12, sgn=1)
             for Tp in Tps:  # accumulate func to FFT
                 for S in Ss:
                     WTpSr_0z = self._ifft2(self._W_ST(Tp, S, ders_1=0))
