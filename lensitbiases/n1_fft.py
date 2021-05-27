@@ -739,21 +739,22 @@ class n1_fft:
             for Tp in Tps:  # accumulate func to FFT
                 for S in Ss:
                     WTpSr_0z = self._ifft2(self._W_ST(Tp, S, ders_1=0))
-                    WTpSr = self._ifft2(self._W_ST(Tp, S)) # could use that for S, Tp W is just a conj()
+                    WTpSr    = self._ifft2(self._W_ST(Tp, S)) # could use that for S, Tp W is just a conj()
                     WTpSr_0z_xipp0 = self._ifft2(WTpSr_0z * self.xipp[0])
                     WTpSr_0z_xipp1 = self._ifft2(WTpSr_0z * self.xipp[1])
-                    WTpSr_xipp0 = self._ifft2(WTpSr * self.xipp[0])
-                    WTpSr_xipp1 = self._ifft2(WTpSr * self.xipp[1])
-                    sgn = (-1) ** (Tp == 'Q') * (-1) ** (S == 'Q') #No flip sym sign since this is product of TTp and TS
-                    #sgn_TTp = self.xy_sym * (-1) ** (T == 'Q') * (-1) ** (Tp == 'Q')
-                    #sgn_TS = self.xy_sym * (-1) ** (T == 'Q') * (-1) ** (S == 'Q')
+                    WTpSr_xipp0    = self._ifft2(WTpSr * self.xipp[0])
+                    WTpSr_xipp1    = self._ifft2(WTpSr * self.xipp[1])
                     for T in Ts:
+                        sgn_TTp = self.xy_sym * (-1) ** (T == 'Q') * (-1) ** (Tp == 'Q')
+                        sgn_TpS = self.xy_sym * (-1) ** (Tp == 'Q') * (-1) ** (S == 'Q')
+                        #sgn_TS = self.xy_sym * (-1) ** (T == 'Q') * (-1) ** (S == 'Q')
                         add_ST  = in1 * WTTp_zz[T + Tp] * WTpSr_0z_xipp1 + in0 * WTTp_zz[T + Tp] * WTpSr_0z_xipp0
-                        add_ST += sgn * add_ST.T
+                        add_ST += sgn_TTp * sgn_TpS * add_ST.T
                         dcls[S + T] -= 2 * add_ST.real
+
                         add_ST =  in0 * WTTp_z0[T + Tp] * WTpSr_xipp0
-                        add_ST += sgn * add_ST.T
-                        add_ST += 2 * in0 * WTTp_z1[T + Tp] * WTpSr_xipp1
+                        add_ST += sgn_TTp * sgn_TpS  * add_ST.T # (1,1) always (0,0).T * sgns
+                        add_ST += 2 * in0 * WTTp_z1[T + Tp] * WTpSr_xipp1 # (0, 1 ) always (1,0)
                         dcls[S + T]  += add_ST.real
                         dcls[T + S]  += add_ST.real
         else:
@@ -768,6 +769,8 @@ class n1_fft:
             for S in Ss:
                 for T in Ss:
                     dN += self._X2S(S, X, 1) * self._X2S(T, Y, 1) * dcls[S + T]
+                    if X != Y:
+                        dN += self._X2S(T, X, 1) * self._X2S(S, Y, 1) * dcls[S + T]
             dN1[spec.lower()] = self.box.sum_in_l(dN)
         for dcl in dN1.values():
             dcl *= -self.norm * 2 * 0.25
