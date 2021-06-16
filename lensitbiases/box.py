@@ -46,7 +46,7 @@ class box:
 
     def rsqd2l(self, r2):
         if self.k2l is None: # default
-            return np.int_(np.round((2. * np.pi / self.lsides[0]) * np.sqrt(r2)))
+            return np.int_(np.round(2. * np.pi / self.lsides[0] * np.sqrt(r2)))
         elif self.k2l in ['lensit']:
             k = (2. * np.pi / self.lsides[0]) * np.sqrt(r2)
             return np.uint16(np.round(k - 0.5) + 0.5 * ((k - 0.5) < 0))

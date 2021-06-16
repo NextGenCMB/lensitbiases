@@ -9,3 +9,7 @@ installation:
 
     * pip install -e ./ [--user]
 
+# Notes, TODOs, etc
+* dN1/dcl TT, EE, BB tested for Planck and works below the percent for <= 400 and ~% for <= 2048, probably due to interpolation scheme
+* case of l1 or l2 being zero still to fix
+* better freq to multipole mapping?

@@ -111,9 +111,9 @@ class n1_fft:
         self._cos2p_sin2p_v1 = None
         #==== Builds required spectra:
         # === Filter and cls array needed later on:
-        fals   = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, fals[k] ) for k in fals.keys()}   # Filtering matrix
-        cls_f  = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_f[k]) for k in cls_f.keys()}  # responses spectra
-        cls_w  = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_w[k]) for k in cls_w.keys()}  # estimator weights spectra
+        fals   = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 3, fals[k] ) for k in fals.keys()}   # Filtering matrix
+        cls_f  = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 3, cls_f[k]) for k in cls_f.keys()}  # responses spectra
+        cls_w  = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 3, cls_w[k]) for k in cls_w.keys()}  # estimator weights spectra
 
 
         self.F_ls = cls_dot([fals])
@@ -726,7 +726,7 @@ class n1_fft:
             WTTp_zz = {}
             WTTp_z1 = {}
             WTTp_z0 = {}
-
+            # FIXME: get rid of 1e-12 with divide-by-zero-proof cosp2sin2p....
             self._destroy_key(k)
             self._build_key(k, L, rfft=False, w=0. + 1e-12, sgn=1)
             for T in Ts:
@@ -773,7 +773,7 @@ class n1_fft:
                         dN += self._X2S(T, X, 1) * self._X2S(S, Y, 1) * dcls[S + T]
             dN1[spec.lower()] = self.box.sum_in_l(dN)
         for dcl in dN1.values():
-            dcl *= -self.norm * 2 * 0.25
+            dcl *= -self.norm
         return dN1
 
     def get_n1(self, k, L, do_n1mat=True, _optimize=2, _pyfftw=True):
