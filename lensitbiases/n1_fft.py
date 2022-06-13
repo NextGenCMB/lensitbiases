@@ -111,9 +111,9 @@ class n1_fft:
         self._cos2p_sin2p_v1 = None
         #==== Builds required spectra:
         # === Filter and cls array needed later on:
-        fals   = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 3, fals[k] ) for k in fals.keys()}   # Filtering matrix
-        cls_f  = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 3, cls_f[k]) for k in cls_f.keys()}  # responses spectra
-        cls_w  = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 3, cls_w[k]) for k in cls_w.keys()}  # estimator weights spectra
+        fals   = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1000, fals[k] ) for k in fals.keys()}   # Filtering matrix
+        cls_f  = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1000, cls_f[k]) for k in cls_f.keys()}  # responses spectra
+        cls_w  = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1000, cls_w[k]) for k in cls_w.keys()}  # estimator weights spectra
 
 
         self.F_ls = cls_dot([fals])
