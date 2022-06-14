@@ -1,5 +1,4 @@
-\documentclass[11pt]{article}
-
+\documentclass[prd, superscriptaddress, tightenlines, longbibliography, nofootinbib, eqsecnum, amsfonts, amsmath, floatfix, onecolumn, notitlepage]{revtex4-2}
 \usepackage[utf8]{inputenc}
 \usepackage{mathrsfs}
 \usepackage{euscript}
@@ -35,7 +34,11 @@
 \newcommand{\intLp}{\int_{\substack{\bl'_1 + \bl'_2 \\ =\bll' }}}
 
 \newcommand{\cred}[1]{\color{red} {#1} \color{black}}
-Starting from the 'usual' n1,
+\title{rFFT N1 notes}
+\author{Julien Carron, 2021}
+\maketitle
+\section{N1 with rFFTs}
+Starting from the `usual' n1 (see e.g. \url{https://arxiv.org/abs/2101.12193)},
 \begin{equation}
 \begin{split}
 n^{(1)}(L) = &\intL \intLp \Xi_{ij}(\bl_1, \bl_2) \Xi_{pq}(\bl'_1, \bl'_2) \\ &\times\left[ C^{\phi \phi}_{|\bl_1+\bl'_1|}f_{ip}(\bl_1, \bl'_1) f_{jq}(\bl_2, \bl'_2) + C^{\phi \phi}_{|\bl_1+\bl'_2|}f_{iq}(\bl_1, \bl'_2) f_{jp}(\bl_2, \bl'_1) \right].
