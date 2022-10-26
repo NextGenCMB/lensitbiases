@@ -248,7 +248,6 @@ class nhl_fft:
 
 
         """
-        assert k not in ['p'], ''
 
         X2i = {'T': 0, 'E': 1, 'B': 2}
         Ss =  ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
