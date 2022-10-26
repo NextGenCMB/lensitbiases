@@ -1,3 +1,4 @@
+from __future__ import annotations
 import sys, os
 import numpy as np
 import lensitbiases
@@ -63,7 +64,7 @@ def cls_dot(cls_list):
                 ret[i, j] += cls_0[i, k] * cls[k, j]
     return ret
 
-def get_fal(clscmb_filt=None, clscmb_dat=None, lmin_ivf=100, lmax_ivf=2048, nlevt=35., nlevp=55., beam=6.5, jt_tp=False):
+def get_fal(clscmb_filt=None, clscmb_dat=None, lmin_ivf=100, lmax_ivf=2048, nlevt:float or np.ndarray=35., nlevp:float or np.ndarray=55., beam:float or np.ndarray=6.5, jt_tp=False):
     """Loads default filtering and inverse-variance filtered spectral matrices for test cases
 
         Args:
@@ -71,9 +72,9 @@ def get_fal(clscmb_filt=None, clscmb_dat=None, lmin_ivf=100, lmax_ivf=2048, nlev
             clscmb_dat: CMB spectra in the data maps (defaults to clscmb_filt)
             lmin_ivf: minimum CMB multipole fed into the QE
             lmax_ivf: maximum CMB multipole fed into the QE
-            nlevt: noise level in temperature in uKarcmin
-            nlevp: noise level in polarizatiion in uKarcmin
-            beam: beam fwhm width in arcmin
+            nlevt: noise level in temperature in uKarcmin (float, or array of size lmax_ivf + 1 for non-white noise)
+            nlevp: noise level in polarizatiion in uKarcmin (float, or array of size lmax_ivf + 1 for non-white noise)
+            beam: beam fwhm width in arcmin (if float) or full transfer function array
             jt_tp: True of joint temperature-polarisation filtering, False if not
 
         Returns:
@@ -86,12 +87,15 @@ def get_fal(clscmb_filt=None, clscmb_dat=None, lmin_ivf=100, lmax_ivf=2048, nlev
     if clscmb_dat is None:
         clscmb_dat = clscmb_filt
     l = np.arange(lmax_ivf + 1, dtype=int)
-    transf = np.exp(-l * (l + 1.) * (beam / 60 / 180 * np.pi/ 2.3548200450309493) ** 2 * 0.5)
+    if np.isscalar(beam):
+        transf = np.exp(-l * (l + 1.) * (beam / 60 / 180 * np.pi/ 2.3548200450309493) ** 2 * 0.5)
+    else:
+        transf = beam[:lmax_ivf + 1].copy()
     ivcl, fal = get_ivf_cls(clscmb_dat, clscmb_filt, lmin_ivf, lmax_ivf, nlevt, nlevp, nlevt, nlevp, transf,  jt_tp=jt_tp)
     return ivcl, fal, lmax_ivf
 
 
-def _get_fal(a, cl_len, nlev, transf, lmin, lmax):
+def _get_fal(a, cl_len, nlev:float or np.ndarray, transf, lmin, lmax):
     """Simple diagonal isotropic filter
 
     """
@@ -100,7 +104,10 @@ def _get_fal(a, cl_len, nlev, transf, lmin, lmax):
     return fal
 
 
-def get_ivf_cls(cls_cmb_dat, cls_cmb_filt, lmin, lmax, nlevt_f, nlevp_f, nlevt_m, nlevp_m, transf, jt_tp=False):
+def get_ivf_cls(cls_cmb_dat, cls_cmb_filt, lmin, lmax,
+                nlevt_f:float or np.ndarray, nlevp_f:float or np.ndarray,
+                nlevt_m:float or np.ndarray, nlevp_m:float or np.ndarray,
+                transf, jt_tp=False):
     """inverse filtered spectra (spectra of Cov^-1 X) for CMB inverse-variance filtering
 
 
@@ -109,10 +116,10 @@ def get_ivf_cls(cls_cmb_dat, cls_cmb_filt, lmin, lmax, nlevt_f, nlevp_f, nlevt_m
             cls_cmb_filt: dict of cmb cls used in the filtering matrix
             lmin: minimum multipole considered
             lmax: maximum multipole considered
-            nlevt_f: fiducial temperature noise level used in the filtering in uK-amin
-            nlevp_f: fiducial polarization noise level used in the filtering in uK-amin
-            nlevt_m: temperature noise level of the data in uK-amin
-            nlevp_m: polarization noise level of the data in uK-amin
+            nlevt_f: fiducial temperature noise level used in the filtering in uK-amin (float, or array if non-white)
+            nlevp_f: fiducial polarization noise level used in the filtering in uK-amin (float, or array if non-white)
+            nlevt_m: temperature noise level of the data in uK-amin (float, or array if non-white)
+            nlevp_m: polarization noise level of the data in uK-amin (float, or array if non-white)
             transf: CMB transfer function
             jt_tp: if set joint temperature-polarization filtering is performed. If not they are filtered independently
 
