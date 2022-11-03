@@ -12,6 +12,8 @@ installation:
 
 demo notebook [here](demo_N1.ipynb)
 
+Paper references: this code was developed for https://arxiv.org/abs/2206.07773 and https://arxiv.org/abs/2112.05764
+
 # Notes, TODOs, etc
 * dN1/dcl TT, EE, BB tested for Planck and works below the percent for <= 400 and ~% for <= 2048, probably due to interpolation scheme
 * case of l1 or l2 being zero still to fix
