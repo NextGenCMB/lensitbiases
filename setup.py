@@ -1,14 +1,12 @@
-import setuptools
-from numpy.distutils.core import setup
-from numpy.distutils.misc_util import Configuration
+from setuptools import setup
 import glob
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 
-def configuration(parent_package='', top_path=''):
-    config = Configuration('', parent_package, top_path)
-    return config
+#def configuration(parent_package='', top_path=''):
+#    config = Configuration('', parent_package, top_path)
+#    return config
 
 setup(
     name='lensitbiases',
@@ -23,5 +21,5 @@ setup(
                                          'lensitbiases/data/cls/FFP10_wdipole_params.ini'])],
     install_requires=['numpy', 'pyfftw'],
     requires=['numpy', 'pyfftw'],
-    long_description=long_description,
-    configuration=configuration)
+    long_description=long_description)
+    #configuration=configuration)
