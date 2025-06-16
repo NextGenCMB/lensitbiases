@@ -1,25 +1,36 @@
-from setuptools import setup
-import glob
-with open("README.md", "r") as fh:
+import setuptools
+from setuptools import setup, find_packages
+
+# Read the long description from README
+with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
-
-
-#def configuration(parent_package='', top_path=''):
-#    config = Configuration('', parent_package, top_path)
-#    return config
 
 setup(
     name='lensitbiases',
     version='0.0.1',
-    packages=['lensitbiases'],
+    packages=find_packages(),  # Automatically finds all packages
     url='https://github.com/NextGenCMB/lensitbiases',
     author='Julien Carron',
     author_email='to.jcarron@gmail.com',
     description='FFT-based lensing and other anisotropies N1-N0 bias calculator',
-    data_files=[('lensitbiases/data/cls', ['lensitbiases/data/cls/FFP10_wdipole_lensedCls.dat',
-                                         'lensitbiases/data/cls/FFP10_wdipole_lenspotentialCls.dat',
-                                         'lensitbiases/data/cls/FFP10_wdipole_params.ini'])],
-    install_requires=['numpy', 'pyfftw'],
-    requires=['numpy', 'pyfftw'],
-    long_description=long_description)
-    #configuration=configuration)
+    install_requires=[
+        'numpy',
+        'pyfftw'
+    ],
+    include_package_data=True,  # Ensures data files are included
+    package_data={
+        'lensitbiases': [
+            'data/cls/FFP10_wdipole_lensedCls.dat',
+            'data/cls/FFP10_wdipole_lenspotentialCls.dat',
+            'data/cls/FFP10_wdipole_params.ini'
+        ]
+    },
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: OS Independent",
+    ],
+    python_requires='>=3.6',  # Ensures compatibility with your version
+)
