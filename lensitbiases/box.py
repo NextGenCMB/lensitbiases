@@ -57,10 +57,22 @@ class box:
         n2y, n2x = np.meshgrid(self.ny_1d ** 2, (self.nx_1d if rfft else self.ny_1d) ** 2, indexing='ij')
         return self.rsqd2l(n2y + n2x)
     
-    def lx_int(self, rfft=True):
-        _, n2x = np.meshgrid(self.ny_1d ** 2, (self.nx_1d if rfft else self.ny_1d) ** 2, indexing='ij')
-        return self.rsqd2l(n2x)
+    def lx(self, rfft=True):
+        _, n2x = np.meshgrid(self.ny_1d, (self.nx_1d if rfft else self.ny_1d), indexing='ij')
+        return n2x * (2. * np.pi / self.lsides[1])
 
+    def ly(self, rfft=True):
+        n2y, _ = np.meshgrid(self.ny_1d, (self.nx_1d if rfft else self.ny_1d), indexing='ij')
+        return n2y * (2. * np.pi / self.lsides[0])
+
+    def triangles_count(self, lx_ly_cond=lambda lx,ly: np.ones(lx.shape, dtype=bool)):
+        """Returns number of pairs of vector l1, l2 such l1 + l2 = L for each vector L, including cuts on l1 and l2
+
+                The normalization is such that the output is 1 everywhere when there are no cuts at all
+        
+        """
+        return np.fft.fft2(np.fft.irfft2(np.where(lx_ly_cond(self.lx(), self.ly()), 1., 0)) ** 2).real
+    
     def cos2p_sin2p(self, rfft=True):
         """Returns the cosines and sines of twice the polar angle
 
