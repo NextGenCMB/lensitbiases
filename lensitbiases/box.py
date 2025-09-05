@@ -32,6 +32,15 @@ class box:
         self._ellcounts = None
         self._cos2p_sin2p = None
 
+    def plot_rfft(self, rfftm, kmin=None,title='',**imshow_kwargs):
+        import pylab as pl
+        kmin = kmin or rfftm.shape[1]
+        pl.figure()
+        image = pl.imshow( (rfftm )[:kmin, 0:kmin], **imshow_kwargs)
+        pl.ylabel(r'$\ell_y / %.0f$'%self.lminbox)
+        pl.xlabel(r'$\ell_x / %.0f$'%self.lminbox)
+        pl.title(title)
+        return image
 
     def _get_lcounts(self):
         if self._ellcounts is None:

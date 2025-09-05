@@ -11,9 +11,18 @@ import pyfftw
 
 class len_fft:
     def __init__(self, cls_unl, cpp, lminbox=50, lmaxbox=2500, k2l=None):
+        """
+
+            :param cls_unl: unlensed cls
+            :param cpp: lenspotential cls, or 2D rfft matrix for anisotropic cases
+            :param lminbox: desired minimum multipole of the box
+            :param lmaxbox: desired maximum multipole of the box
+        
+            
+        """
         lside = 2. * np.pi / lminbox
         npix = int(2 * lmaxbox / float(lminbox)) + 1
-        if npix % 2 == 1: npix += 1
+        npix += npix%2
 
         # === instance with 2D flat-sky box info
         self.box = box(lside, npix, k2l=k2l)
@@ -26,8 +35,14 @@ class len_fft:
         # === precalc of deflection corr fct:
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
-        xipp = np.array([self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2),
-                         self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny)])# 01 or 10
+        if cpp.ndim == 1:
+            xipp = np.array([self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2),
+                            self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny)])# 01 or 10
+        elif cpp.shape == self.box.rshape:
+            xipp = np.array([self._ifft2(-cpp * ny ** 2),
+                             self._ifft2(-cpp * nx * ny)])# 01 or 10
+        else:
+            assert 0, 'dont know what to do with this cpp input'
 
         xipp[0] -= xipp[0, 0, 0]
         xipp[1] -= xipp[1, 0, 0]

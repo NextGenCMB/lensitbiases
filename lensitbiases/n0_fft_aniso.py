@@ -13,14 +13,11 @@ def cli(arr):
 
 class nhl_fft:
     def __init__(self, cls_noise, cls_noise_filt, cls_w, transf_cl, y_extent_deg=1.85, lminbox=50, lmaxbox=2500, lx_cut=0, 
-                 iso_filt=False, _iso_dat=False, _response=False, k2l=None, cls_w2=None, _Kcache=cacher_mem()):
+                 iso_filt=False, _iso_dat=False, _response=False, k2l=None, cls_w2=None, _Kcache=None, verbose=False):
         """
          
-         More flexible that anisotropic noise (along one direction, e.g. SPT-3G) and lx-cuts
+        More flexible lensing responses and biases calculator allowing anisotropic noise (along one direction, e.g. SPT-3G) and lx-cuts
 
-            Note:
-                for a response calculation set cls_w to the QE qeweights cls, and cls_w2 to the sky response cls (lencls or gradcls typically),
-                and ivfs to the filterting matrix B^t Cov^{-1} B  cls (fals)
 
         """
         transf_cl = np.atleast_2d(transf_cl)
@@ -33,7 +30,8 @@ class nhl_fft:
 
 
         lside = 2. * np.pi / lminbox
-        npix = good_size(int(2 * lmaxbox / float(lminbox)) + 1, True)
+        npix = int(2 * lmaxbox / float(lminbox)) + 1
+        npix += npix%2
 
         # ===== instance with 2D flat-sky box info
         self.box = box(lside, npix, k2l=k2l)
@@ -44,7 +42,17 @@ class nhl_fft:
         cls_noise = [{k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cl[k]) for k in cl.keys()} for cl in cls_noise]  # white-alike noise spectra
         cls_noise_filt = [{k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cl[k]) for k in cl.keys()} for cl in cls_noise_filt]  # white-alike noise spectra
 
-        cls_w1 = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_w[k]) for k in cls_w.keys()}  # estimator weights spectra
+        # distinguishes 2 cases: either cl array or 2D rfft map from elsewhere (e.g. for iterative calculations)
+        cls_w_1d = False
+        for spec in cls_w:
+            assert cls_w[spec].ndim == 1 or cls_w[spec].shape == self.box.rshape
+            if cls_w[spec].ndim == 1:
+                cls_w_1d = True
+
+        if cls_w_1d:
+            cls_w1 = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_w[k]) if cls_w[k].ndim == 1 else cls_w[k] for k in cls_w.keys()}  # estimator weights spectra
+        else:
+            cls_w1 = cls_w
         bl = [extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, tcl) for tcl in transf_cl]  # beam transfer functions
         if cls_w2 is None:
             cls_w2 = cls_w1
@@ -58,10 +66,11 @@ class nhl_fft:
         #self.w2K_ls  = w2K_ls
         #self.wKw_sym_ls = wKw_sym_ls
         # We need the symmetric part only of this (there is a trace against symmetric K)
+        self.cls_w_1d = cls_w_1d
 
-        self.cls_w1 = cls_dot([cls_w1])
+        self.cls_w1 = cls_dot([cls_w1]) if cls_w_1d else cls_w1
         self.cls_w2 = cls_dot([cls_w2]) if cls_w2 is not cls_w1 else self.cls_w1
-        self.cls_cmb = cls_dot([cls_w1]) # FIXME
+        self.cls_cmb = cls_dot([cls_w1]) if cls_w_1d else cls_w1 # FIXME
 
         # First dim for these is the channel
         self.cls_noise = np.array([cls_dot([cl]) for cl in cls_noise])
@@ -86,13 +95,14 @@ class nhl_fft:
 
         lcell = (self.box.lsides[0] / self.box.shape[0]) / np.pi * 180 * 60
         y_extent = max(int(y_extent_deg * 60 / lcell), 0)
-        print('grid points y_extent:', y_extent )
+        if verbose:
+            print('grid points y_extent:', y_extent )
         self.y_extent = y_extent
 
         self.nchannels = nchannels
         self._multifreq = True
 
-        self._Kcache = _Kcache
+        self._Kcache = cacher_mem() if _Kcache is None else _Kcache
     #@staticmethod
     #def _build_cl_ls(cls_ivfs, cls_w1, cls_w2):
     #    K_ls   = cls_dot([cls_ivfs])
@@ -103,12 +113,14 @@ class nhl_fft:
     #    return K_ls, Kw1_ls, w2K_ls, wKw_sym_ls
 
 
-    def plot_rfft(self, rfftm, **imshow_kwargs):
+    def plot_rfft(self, rfftm, kmin=None,title='',**imshow_kwargs):
         import pylab as pl
-        kmin = rfftm.shape[1]
+        kmin = kmin or rfftm.shape[1]
+        pl.figure()
         image = pl.imshow( (rfftm )[:kmin, 0:kmin])
-        pl.ylabel(r'$L_y / %.0f$'%self.box.lminbox)
-        pl.xlabel(r'$L_x / %.0f$'%self.box.lminbox)
+        pl.ylabel(r'$\ell_y / %.0f$'%self.box.lminbox)
+        pl.xlabel(r'$\ell_x / %.0f$'%self.box.lminbox)
+        pl.title(title)
         return image
     def _mk_window(self, typ=None):
         if typ == None:
@@ -122,6 +134,8 @@ class nhl_fft:
             correlation fct is the triangle function along y times the underlying isotropic process
         
         """
+        if not np.any(cl):
+            return np.zeros(self.box.rshape, dtype=float)
         if _isofilt:
             return cl[self.box.ls()]
         if y_extent is None:
@@ -145,13 +159,13 @@ class nhl_fft:
             return self._Kcache.load(fn)
         ret = np.zeros(self.box.rshape, dtype=complex)
         if i != j:
-            assert np.all(self.cls_cmb[i, j] == 0)
+            assert np.all(self._cls_w(i, j, 3) == 0)
             # FIXME: this is wrong for TE etc !!
             return ret
         if _multifreq or self._multifreq:
             assert self.bl.ndim == 2 and self.cls_noise.ndim == 4 and self.cls_noise_filt.ndim == 4, (self.bl.ndim, self.cls_noise.ndim, self.cls_noise_filt)
             # Here using Ci - Ci(Ci + Ni)^{-1}Ci
-            cmbi = cli(self.cls_cmb[i, j])[self.box.ls()]
+            cmbi = cli(self._cls_w(i, j, 3))
             # Build noise, summing over frequencies when relevant
             Ni_f = cli(self._noise_mat(self.cls_noise_filt[0, i, j], _isofilt=self.iso_filt) ) * (self.bl[0] ** 2)[self.box.ls()]
             for cha in range(1, self.nchannels):
@@ -161,10 +175,10 @@ class nhl_fft:
                 ret[:] = Kf
             else:
                 # FIXME: assuming no noise covariance between channels for now
-                ret[:] = Kf * self.cls_cmb[i, j][self.box.ls()] * Kf
-                Ni_fdf = cli(self._noise_mat(self.cls_noise_filt[0, i, j], _isofilt=self.iso_filt) ) ** 2 * self._noise_mat(self.cls_noise[0, i, j]) * (self.bl[0] ** 2)[self.box.ls()]
+                ret[:] = Kf * self._cls_w(i, j, 3) * Kf
+                Ni_fdf = cli(self._noise_mat(self.cls_noise_filt[0, i, j], _isofilt=self.iso_filt) ) ** 2 * self._noise_mat(self.cls_noise[0, i, j], _isofilt=self._iso_dat) * (self.bl[0] ** 2)[self.box.ls()]
                 for cha in range(1, self.nchannels):
-                    Ni_fdf += cli(self._noise_mat(self.cls_noise_filt[cha, i, j], _isofilt=self.iso_filt) ) ** 2 * self._noise_mat(self.cls_noise[cha, i, j]) * (self.bl[cha] ** 2)[self.box.ls()]
+                    Ni_fdf += cli(self._noise_mat(self.cls_noise_filt[cha, i, j], _isofilt=self.iso_filt) ) ** 2 * self._noise_mat(self.cls_noise[cha, i, j], _isofilt=self._iso_dat) * (self.bl[cha] ** 2)[self.box.ls()]
                 ret += cmbi * cli(cmbi + Ni_f) * Ni_fdf * cli(cmbi + Ni_f) * cmbi
         else:
             assert 0
@@ -186,18 +200,27 @@ class nhl_fft:
         self._Kcache.cache(fn, ret)
         return ret
     
+    def _cls_w(self, i, j, one_or_two_or_three=1):
+        assert one_or_two_or_three in [1, 2, 3]
+        cls = {1:self.cls_w1, 2:self.cls_w2, 3:self.cls_cmb}[one_or_two_or_three]
+        if self.cls_w_1d:
+            return cls[i, j][self.box.ls()]
+        else:
+            x, y= {0:'t',1:'e',2:'b'}[i], {0:'t',1:'e',2:'b'}[j]
+            return cls.get(x+y, cls.get(y+x, [0.]))
+        
     def _build_Kw1(self, i, j):
         ret = np.zeros(self.box.rshape, dtype=complex)
         for k in range(3):
-            if np.any(self.cls_w1[k, j]) and np.any(self.cls_cmb[i, k]):
-                ret += self._build_K(i, k) * self.cls_w1[k, j][self.box.ls()] 
+            if np.any(self._cls_w(k, j, 1)) and np.any(self._cls_w(i, k, 3)):
+                ret += self._build_K(i, k) * self._cls_w(k, j, 1)
         return ret
             
     def _build_w2K(self, i, j):
         ret = np.zeros(self.box.rshape, dtype=complex)
         for k in range(3):
-            if np.any(self.cls_w2[i, k]) and np.any(self.cls_cmb[k, j]):
-                ret += self._build_K(k, j) * self.cls_w2[i, k][self.box.ls()] 
+            if np.any(self._cls_w(i, k, 2)) and np.any(self._cls_w(k, j, 3)):
+                ret += self._build_K(k, j) * self._cls_w(i, k, 2) 
         return ret
 
     def _build_wKw_sym(self, i, j):
@@ -205,8 +228,8 @@ class nhl_fft:
         ret = np.zeros(self.box.rshape, dtype=complex)
         for k1 in range(3):
             for k2 in range(3):
-             if np.any(self.cls_w1[i, k1]) and np.any(self.cls_w2[k2, j]) and np.any(self.cls_cmb[k1, k2]):
-                ret += self._build_K(k1, k2) * (self.cls_w1[i, k1] * self.cls_w2[k2, j])[self.box.ls()]
+             if np.any(self._cls_w(i, k1, 1)) and np.any(self._cls_w(k2, j, 2)) and np.any(self._cls_w(k1, k2, 3)):
+                ret += self._build_K(k1, k2) * (self._cls_w(i, k1, 1) * self._cls_w(k2, j, 2))
         return ret
 
     def _ifft2(self, rm):
