@@ -12,7 +12,7 @@ def cli(arr):
     return ret
 
 class nhl_fft:
-    def __init__(self, cls_noise, cls_noise_filt, cls_w, transf_cl, y_extent_deg=1.85, lminbox=50, lmaxbox=2500, lx_cut=0, 
+    def __init__(self, cls_noise, cls_noise_filt, cls_w, transf_cl, y_extent_deg=1.85, lminbox=50, lmaxbox=2500, lx_cut=0, lx_lp=0,
                  iso_filt=False, _iso_dat=False, _response=False, k2l=None, cls_w2=None, _Kcache=None, verbose=False):
         """
          
@@ -85,6 +85,7 @@ class nhl_fft:
         self.norm = norm
 
         self.lx_cut = lx_cut
+        self.lx_lp = lx_lp
 
         self.iso_filt = iso_filt
         self._response = _response
@@ -150,11 +151,17 @@ class nhl_fft:
         noise_mat = self._noise_mat(self.cls_noise[channel, i, j]) * (np.abs(self.box.lx()) > self.lx_cut)
         return (self.box.sum_in_l(noise_mat) / self.box.mode_counts())
 
+    def _lowpassfunc(self, lx):
+        if self.lx_lp > 0:
+            return np.exp(- (lx / self.lx_lp) ** 6)
+        else:
+            return np.ones_like(lx, dtype=float)
+
     def _build_K(self, i, j, _response_mode=False, _multifreq=False):   
         # Here cls_w1 is the same as cl_cmb
         # For response calc, just 1/cls_filt
         resp = (self._response or _response_mode)
-        fn = '%s%s%s'%('r'*resp,min(i, j), max(j, i))
+        fn = '%s%s%s_%s_%s_%s'%('r'*resp,min(i, j), max(j, i), self._lmax_T, self._lmax_E, self._lmax_B)
         if self._Kcache.is_cached(fn):
             return self._Kcache.load(fn)
         ret = np.zeros(self.box.rshape, dtype=complex)
@@ -176,9 +183,10 @@ class nhl_fft:
             else:
                 # FIXME: assuming no noise covariance between channels for now
                 ret[:] = Kf * self._cls_w(i, j, 3) * Kf
-                Ni_fdf = cli(self._noise_mat(self.cls_noise_filt[0, i, j], _isofilt=self.iso_filt) ) ** 2 * self._noise_mat(self.cls_noise[0, i, j], _isofilt=self._iso_dat) * (self.bl[0] ** 2)[self.box.ls()]
+                lowpass2 = self._lowpassfunc(self.box.lx()) ** 2
+                Ni_fdf = lowpass2 * cli(self._noise_mat(self.cls_noise_filt[0, i, j], _isofilt=self.iso_filt) ) ** 2 * self._noise_mat(self.cls_noise[0, i, j], _isofilt=self._iso_dat) * (self.bl[0] ** 2)[self.box.ls()]
                 for cha in range(1, self.nchannels):
-                    Ni_fdf += cli(self._noise_mat(self.cls_noise_filt[cha, i, j], _isofilt=self.iso_filt) ) ** 2 * self._noise_mat(self.cls_noise[cha, i, j], _isofilt=self._iso_dat) * (self.bl[cha] ** 2)[self.box.ls()]
+                    Ni_fdf += lowpass2 * cli(self._noise_mat(self.cls_noise_filt[cha, i, j], _isofilt=self.iso_filt) ) ** 2 * self._noise_mat(self.cls_noise[cha, i, j], _isofilt=self._iso_dat) * (self.bl[cha] ** 2)[self.box.ls()]
                 ret += cmbi * cli(cmbi + Ni_f) * Ni_fdf * cli(cmbi + Ni_f) * cmbi
         else:
             assert 0
@@ -197,6 +205,8 @@ class nhl_fft:
             ret *= (self.box.ls() <= self._lmax_E)
         if i == 2 and j == 2 and self._lmax_B is not None:
             ret *= (self.box.ls() <= self._lmax_B)
+        if self.lx_lp > 0: # Low-pass filter
+            ret *= np.exp(- (self.box.lx() / self.lx_lp) ** 6)
         self._Kcache.cache(fn, ret)
         return ret
     
