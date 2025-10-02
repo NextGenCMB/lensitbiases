@@ -29,9 +29,9 @@ class len_fft:
         self.shape = self.box.shape
 
         # === Filter and cls array needed later on:
-        cls_unl = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_unl[k]) for k in cls_unl.keys()}  # filtered maps spectra
+        #cls_unl = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_unl[k]) for k in cls_unl.keys()}  # filtered maps spectra
 
-        self.cunl_ls   = cls_dot([cls_unl])
+        self.cunl_ls   = self._cldict2arr(cls_unl)
         # === precalc of deflection corr fct:
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
@@ -59,6 +59,25 @@ class len_fft:
         ifft2 = pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
         return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
 
+    def _get_clmat(self, a, b):
+        if self.cunl_ls[(a, b)].ndim == 1:
+            return  self.cunl_ls[(a, b)][self.box.ls()]
+        elif self.cunl_ls[(a, b)].shape == self.box.rshape:
+            return self.cunl_ls[(a, b)]
+        else:
+            assert 0, 'dont know what to do with this cunl_ls input'
+    def _cldict2arr(self, cls_dict):
+        lmaxp1 = np.max([len(cl) for cl in cls_dict.values()])
+        ret = {}
+        for i, x in enumerate(['t', 'e', 'b']):
+            for j, y in enumerate(['t', 'e', 'b']):
+                cl = cls_dict.get(x + y, cls_dict.get(y + x, np.array([0.])))
+                if cl.ndim == 1:
+                    ret[(i, j)] =  extcl(lmaxp1 - 1, cl)
+                elif cl.shape == self.box.rshape: # rfftshaped input, maybe
+                    ret[(i, j)] = cl
+                else: assert 0, 'dont know what to do with this cls input'
+        return ret
 
     def _build_lenmunl_2d_highorder(self, nmax, job='TP', _pyfftw=True, der_axis=None):
         assert job in ['T', 'P', 'TP']
@@ -84,10 +103,9 @@ class len_fft:
         unlCST = np.zeros((len(STs), self.box.rshape[0], self.box.rshape[1]), dtype=float)
 
         #=== Builds unlensed Stokes matrices to update later on
-        ls = self.box.ls()
         for iST, ST in enumerate(STs):
             for XY in XYs:  # === TT, TE, ET, TE, EE, BB at most
-                unlCST[iST] += self.cunl_ls[X2i[XY[0]], X2i[XY[1]]][ls] * self.box.X2S(ST[0], XY[0]) * self.box.X2S(ST[1], XY[1])
+                unlCST[iST] += self._get_clmat(X2i[XY[0]], X2i[XY[1]]) * self.box.X2S(ST[0], XY[0]) * self.box.X2S(ST[1], XY[1])
         nyx = np.array(np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij'))
         if der_axis is not None:
             unlCST = unlCST * (1j * nyx[der_axis])
@@ -145,10 +163,9 @@ class len_fft:
         """
         lencls, specs = self._build_lenmunl_2d_highorder(nmax, job=job)
         X2i = {'T': 0, 'E': 1, 'B': 2}
-        ls = self.box.ls()
         for spec in specs:
             X, Y = spec.upper()
-            lencls[spec] += self.cunl_ls[X2i[X], X2i[Y]][ls]
+            lencls[spec] += self._get_clmat(X2i[X], X2i[Y])
         return lencls
 
     def lensed_gradcls_2d(self, job='TP', nmax=1):
@@ -171,11 +188,10 @@ class len_fft:
         k2 = ny ** 2 + nx ** 2
         k2[0, 0] = 1. # to avoid dividing by zero
         X2i = {'T': 0, 'E': 1, 'B': 2}
-        ls = self.box.ls()
         ret = dict()
         for spec in specs:
             X, Y = spec.upper()
-            ret[spec] = self.cunl_ls[X2i[X], X2i[Y]][ls]  + (lencls_0[spec] * ny + lencls_1[spec] * nx) / k2
+            ret[spec] = self._get_clmat(X2i[X], X2i[Y])  + (lencls_0[spec] * ny + lencls_1[spec] * nx) / k2
         return ret
 
 

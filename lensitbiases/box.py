@@ -36,7 +36,7 @@ class box:
         import pylab as pl
         kmin = kmin or rfftm.shape[1]
         pl.figure()
-        image = pl.imshow( (rfftm )[:kmin, 0:kmin], **imshow_kwargs)
+        image = pl.imshow( (rfftm )[:kmin, 0:kmin], **imshow_kwargs, origin='lower')
         pl.ylabel(r'$\ell_y / %.0f$'%self.lminbox)
         pl.xlabel(r'$\ell_x / %.0f$'%self.lminbox)
         pl.title(title)

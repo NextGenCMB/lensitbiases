@@ -118,7 +118,7 @@ class nhl_fft:
         import pylab as pl
         kmin = kmin or rfftm.shape[1]
         pl.figure()
-        image = pl.imshow( (rfftm )[:kmin, 0:kmin])
+        image = pl.imshow( (rfftm )[:kmin, 0:kmin], origin='lower', **imshow_kwargs)
         pl.ylabel(r'$\ell_y / %.0f$'%self.box.lminbox)
         pl.xlabel(r'$\ell_x / %.0f$'%self.box.lminbox)
         pl.title(title)
@@ -152,11 +152,9 @@ class nhl_fft:
         return (self.box.sum_in_l(noise_mat) / self.box.mode_counts())
 
     def _lowpassfunc(self, lx):
-        if self.lx_lp > 0:
-            return np.exp(- (lx / self.lx_lp) ** 6)
-        else:
-            return np.ones_like(lx, dtype=float)
-
+        lx_lpi = 1./self.lx_lp if self.lx_lp > 0 else 0.
+        return np.exp(- (lx *lx_lpi) ** 6)
+        
     def _build_K(self, i, j, _response_mode=False, _multifreq=False):   
         # Here cls_w1 is the same as cl_cmb
         # For response calc, just 1/cls_filt
