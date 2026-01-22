@@ -34,13 +34,12 @@ class nhl_fft:
         lside = 2. * np.pi / lminbox
         npix_x = int(2 * lmaxbox / float(lminbox)) + 1
         npix_x += npix_x%2
-        lcell = (lside / npix_x) / np.pi * 180 * 60
 
         # Use rectangular box ? relevant if lx-cuts etc
         if y2x_axis_ratio != 1.:
             npix_y = int(npix_x * y2x_axis_ratio)
             npix_y += npix_y%2
-            self.box = rectangle((npix_y*lcell, lside), (npix_y, npix_x), k2l=k2l)
+            self.box = rectangle((npix_y*(lside / npix_x), lside), (npix_y, npix_x), k2l=k2l)
 
         else:
         # ===== instance with 2D flat-sky box info
@@ -104,8 +103,8 @@ class nhl_fft:
         self._lmax_B = None
         self._iso_dat = _iso_dat
 
-        lcell = (self.box.lsides[0] / self.box.shape[0]) / np.pi * 180 * 60
-        y_extent = max(int(y_extent_deg * 60 / lcell), 0)
+        lcell_amin = (self.box.lsides[0] / self.box.shape[0]) / np.pi * 180 * 60
+        y_extent = max(int(y_extent_deg * 60 / lcell_amin), 0)
         if verbose:
             print('grid points y_extent:', y_extent )
         self.y_extent = y_extent
