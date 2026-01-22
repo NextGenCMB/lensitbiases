@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from lensitbiases.utils_n1 import extcl, cls_dot
-from lensitbiases.box import box
+from lensitbiases.box import box, rectangle
 from lenspyx.cachers import cacher_mem, cacher_none
 import pyfftw
 import psutil
@@ -12,13 +12,15 @@ def cli(arr):
     return ret
 
 class nhl_fft:
-    def __init__(self, cls_noise, cls_noise_filt, cls_w, transf_cl, y_extent_deg=1.85, lminbox=50, lmaxbox=2500, lx_cut=0, lx_lp=0,
+    def __init__(self, cls_noise, cls_noise_filt, cls_w, transf_cl, 
+                 y_extent_deg=1.85, lminbox=50, lmaxbox=2500, lx_cut=0, lx_lp=0, y2x_axis_ratio=1.,
                  iso_filt=False, _iso_dat=False, _response=False, k2l=None, cls_w2=None, _Kcache=None, verbose=False):
         """
          
         More flexible lensing responses and biases calculator allowing anisotropic noise (along one direction, e.g. SPT-3G) and lx-cuts
 
-
+            y2x_box_ratio: uses a rectangular box with y/x = y2x_box_ratio
+        
         """
         transf_cl = np.atleast_2d(transf_cl)
         nchannels = transf_cl.shape[0]
@@ -30,12 +32,20 @@ class nhl_fft:
 
 
         lside = 2. * np.pi / lminbox
-        npix = int(2 * lmaxbox / float(lminbox)) + 1
-        npix += npix%2
+        npix_x = int(2 * lmaxbox / float(lminbox)) + 1
+        npix_x += npix_x%2
+        lcell = (lside / npix_x) / np.pi * 180 * 60
 
+        # Use rectangular box ? relevant if lx-cuts etc
+        if y2x_axis_ratio != 1.:
+            npix_y = int(npix_x * y2x_axis_ratio)
+            npix_y += npix_y%2
+            self.box = rectangle((npix_y*lcell, lside), (npix_y, npix_x), k2l=k2l)
+
+        else:
         # ===== instance with 2D flat-sky box info
-        self.box = box(lside, npix, k2l=k2l)
-        self.shape = self.box.shape
+            self.box = box(lside, npix_x, k2l=k2l)
+            self.shape = self.box.shape
 
         # === Filter and cls array needed later on:
         # beam-deconvolved noise
@@ -80,8 +90,8 @@ class nhl_fft:
         self._cos2p_sin2p = None
 
         # === normalization (for lensing keys at least)
-        norm = (self.box.shape[0] / self.box.lsides[0]) ** 2  # overall final normalization from rfft'ing
-        norm *= (float(self.box.lminbox)) ** 4
+        norm = np.prod(np.array(self.box.shape) /np.array(self.box.lsides))  # overall final normalization from rfft'ing
+        norm *= (float(self.box.lminbox_x) * float(self.box.lminbox_y)) ** 2
         self.norm = norm
 
         self.lx_cut = lx_cut
@@ -104,23 +114,14 @@ class nhl_fft:
         self._multifreq = True
 
         self._Kcache = cacher_mem() if _Kcache is None else _Kcache
-    #@staticmethod
-    #def _build_cl_ls(cls_ivfs, cls_w1, cls_w2):
-    #    K_ls   = cls_dot([cls_ivfs])
-    #    Kw1_ls  = cls_dot([cls_ivfs, cls_w1])
-    #    w2K_ls  = cls_dot([cls_w2, cls_ivfs])
-    #    wKw_sym_ls = 0.5 * (cls_dot([cls_w1, cls_ivfs, cls_w2]) + cls_dot([cls_w2, cls_ivfs, cls_w1]))
-    #    # We need the symmetric part only of this (there is a trace against symmetric K)
-    #    return K_ls, Kw1_ls, w2K_ls, wKw_sym_ls
-
 
     def plot_rfft(self, rfftm, kmin=None,title='',**imshow_kwargs):
         import pylab as pl
         kmin = kmin or rfftm.shape[1]
         pl.figure()
         image = pl.imshow( (rfftm )[:kmin, 0:kmin], origin='lower', **imshow_kwargs)
-        pl.ylabel(r'$\ell_y / %.0f$'%self.box.lminbox)
-        pl.xlabel(r'$\ell_x / %.0f$'%self.box.lminbox)
+        pl.ylabel(r'$\ell_y / %.0f$'%self.box.lminbox_y)
+        pl.xlabel(r'$\ell_x / %.0f$'%self.box.lminbox_x)
         pl.title(title)
         return image
     def _mk_window(self, typ=None):

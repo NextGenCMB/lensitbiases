@@ -5,12 +5,12 @@ r"""This module contains rfft methods for calculation of lensed spectra and grad
 import os
 import numpy as np
 from lensitbiases.utils_n1 import extcl, cls_dot
-from lensitbiases.box import box
+from lensitbiases.box import box, rectangle
 import pyfftw
 
 
 class len_fft:
-    def __init__(self, cls_unl, cpp, lminbox=50, lmaxbox=2500, k2l=None):
+    def __init__(self, cls_unl, cpp, lminbox=50, lmaxbox=2500, k2l=None, y2x_axis_ratio=1):
         """
 
             :param cls_unl: unlensed cls
@@ -25,7 +25,13 @@ class len_fft:
         npix += npix%2
 
         # === instance with 2D flat-sky box info
-        self.box = box(lside, npix, k2l=k2l)
+        if y2x_axis_ratio == 1:
+            self.box = box(lside, npix, k2l=k2l)
+        else:
+            lcell = lside / npix
+            npix_y = int(npix * y2x_axis_ratio)
+            npix_y += npix_y%2
+            self.box = rectangle((npix_y*lcell, lside), (npix_y, npix))
         self.shape = self.box.shape
 
         # === Filter and cls array needed later on:
@@ -52,7 +58,7 @@ class len_fft:
         norm *= (float(self.box.lminbox)) ** 4
         self.norm = norm
 
-    def _ifft2(self, rm):
+    def _ifft2(self, rm:np.ndarray):
         oshape = self.box.shape if rm.ndim == 2 else (rm.shape[0], self.box.shape[0], self.box.shape[1])
         inpt = pyfftw.empty_aligned(rm.shape, dtype='complex128')
         outp = pyfftw.empty_aligned(oshape, dtype='float64')

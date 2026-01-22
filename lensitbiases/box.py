@@ -27,18 +27,20 @@ class box:
 
         # mini and maxi multipole in box
         self.lminbox = 2 * np.pi / lside # This is used for normalizations etc
+        self.lminbox_x = 2 * np.pi / lside
+        self.lminbox_y = 2 * np.pi / lside
         self.lmaxbox = self.rsqd2l(nx[npix//2] ** 2 + ny[npix//2] ** 2)
 
         self._ellcounts = None
         self._cos2p_sin2p = None
 
-    def plot_rfft(self, rfftm, kmin=None,title='',**imshow_kwargs):
+    def plot_rfft(self, rfftm:np.ndarray, kmin=None,title='',**imshow_kwargs):
         import pylab as pl
         kmin = kmin or rfftm.shape[1]
         pl.figure()
         image = pl.imshow( (rfftm )[:kmin, 0:kmin], **imshow_kwargs, origin='lower')
-        pl.ylabel(r'$\ell_y / %.0f$'%self.lminbox)
-        pl.xlabel(r'$\ell_x / %.0f$'%self.lminbox)
+        pl.ylabel(r'$\ell_y / %.0f$'%self.lminbox_y)
+        pl.xlabel(r'$\ell_x / %.0f$'%self.lminbox_x)
         pl.title(title)
         return image
 
@@ -63,14 +65,20 @@ class box:
             assert 0, self.k2l + ' not implemented'
 
     def ls(self, rfft=True):
+        if not rfft:
+            assert self.shape[0] == self.shape[1], 'fix following line'
         n2y, n2x = np.meshgrid(self.ny_1d ** 2, (self.nx_1d if rfft else self.ny_1d) ** 2, indexing='ij')
         return self.rsqd2l(n2y + n2x)
     
     def lx(self, rfft=True):
+        if not rfft:
+            assert self.shape[0] == self.shape[1], 'fix following line'
         _, n2x = np.meshgrid(self.ny_1d, (self.nx_1d if rfft else self.ny_1d), indexing='ij')
         return n2x * (2. * np.pi / self.lsides[1])
 
     def ly(self, rfft=True):
+        if not rfft:
+            assert self.shape[0] == self.shape[1], 'fix following line'
         n2y, _ = np.meshgrid(self.ny_1d, (self.nx_1d if rfft else self.ny_1d), indexing='ij')
         return n2y * (2. * np.pi / self.lsides[0])
 
@@ -86,6 +94,8 @@ class box:
         """Returns the cosines and sines of twice the polar angle
 
         """
+        if not rfft:
+            assert self.shape[0] == self.shape[1], 'fix following line'
         s = self.rshape if rfft else self.shape
         k2y, k2x = np.meshgrid(self.ny_1d ** 2, (self.nx_1d ** 2 if rfft else self.ny_1d ** 2), indexing='ij')
         k2 = k2y + k2x
@@ -127,7 +137,7 @@ class box:
             nl[l] -= 1
         return nl
 
-    def sum_in_l(self, weights):
+    def sum_in_l(self, weights:np.ndarray):
         assert weights.shape in (self.rshape, self.shape), (weights.shape, self.rshape,self.shape)
         if weights.shape == self.rshape:
             shape = self.shape
@@ -140,8 +150,39 @@ class box:
             cl = np.bincount(self.ls(rfft=False).flatten(), weights=weights.flatten(), minlength=self.lmaxbox+ 1)
             return cl
 
-    def map2cl(self,m, lmax=None):
+    def map2cl(self,m:np.ndarray, lmax=None):
         assert m.shape == self.shape, (m.shape, self.shape)
         if lmax is None: lmax = self.lmaxbox
         norm =  np.prod(self.lsides) / float(np.prod(self.shape)) ** 2
         return norm * self.sum_in_l(np.abs(np.fft.rfft2(m)) ** 2)[:lmax+1] * cli(self.mode_counts())
+
+
+class rectangle(box):
+    def __init__(self, lsides, npixs, k2l=None):
+        assert len(lsides) == 2 == len(npixs)
+        shape  = npixs
+        rshape = (npixs[0], npixs[1] // 2 + 1)
+
+        # === frequencies
+        nx = freqs(np.arange(rshape[1]), shape[1], signed=True)  # unsigned FFT frequencies
+        ny = freqs(np.arange(shape[0]), shape[0], signed=True)
+
+        self.nx_1d = nx
+        self.ny_1d = ny
+
+        self.shape = shape
+        self.rshape = rshape
+        self.lsides = lsides
+
+        # 2d frequency to multipole scheme
+        self.k2l = k2l
+
+        # mini and maxi multipole in box
+        self.lminbox_x = 2 * np.pi / lsides[1] # This is used for normalizations etc
+        self.lminbox_y = 2 * np.pi / lsides[0] # This is used for normalizations etc
+
+        self.lminbox = min(self.lminbox_x, self.lminbox_y)
+        self.lmaxbox = self.rsqd2l(nx[npixs[1]//2] ** 2 + ny[npixs[0]//2] ** 2)
+
+        self._ellcounts = None
+        self._cos2p_sin2p = None
