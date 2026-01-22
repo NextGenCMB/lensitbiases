@@ -55,9 +55,8 @@ class len_fft:
         else:
             assert 0, 'dont know what to do with this cpp input'
 
-        xipp[0] -= xipp[0, 0, 0]
-        xipp[1] -= xipp[1, 0, 0]
-        xipp[2] -= xipp[2, 0, 0]
+        for xi in xipp:
+            xi-= xi[0, 0]
         self.xipp_m0 = xipp
         # === normalization (for lensing keys at least)
         # overall final normalization from rfft'ing

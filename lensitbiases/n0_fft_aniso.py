@@ -90,7 +90,9 @@ class nhl_fft:
 
         # === normalization (for lensing keys at least)
         norm = np.prod(np.array(self.box.shape) /np.array(self.box.lsides))  # overall final normalization from rfft'ing
-        norm *= (float(self.box.lminbox_x) * float(self.box.lminbox_y)) ** 2
+        
+        # Replaced now all nx, ny by lx, ly
+        #norm *= (float(self.box.lminbox_x) * float(self.box.lminbox_y)) ** 2
         self.norm = norm
 
         self.lx_cut = lx_cut
@@ -263,7 +265,7 @@ class nhl_fft:
         if _response_mode:
             self._response = True
         X2i = {'T': 0, 'E': 1, 'B': 2}
-        ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
+        ly, lx = np.meshgrid(self.box.ny_1d*self.box.lminbox_y, self.box.nx_1d*self.box.lminbox_x, indexing='ij')
 
         ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
         Ss = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
@@ -288,20 +290,20 @@ class nhl_fft:
                         if S != T: fac *= np.sqrt(2.)# off-diagonal terms come with factor of 2
                         i = X2i[X]; j = X2i[Y]
                         K      +=       self._build_K(i, j) * fac
-                        wKw_sym_00 +=  -1 * self._build_wKw_sym(i, j) * ny * ny * fac
-                        wKw_sym_11 +=  -1 * self._build_wKw_sym(i, j) * nx * nx * fac
-                        wKw_sym_01 +=  -1 * self._build_wKw_sym(i, j) * nx * ny * fac
+                        wKw_sym_00 +=  -1 * self._build_wKw_sym(i, j) * ly * ly * fac
+                        wKw_sym_11 +=  -1 * self._build_wKw_sym(i, j) * lx * lx * fac
+                        wKw_sym_01 +=  -1 * self._build_wKw_sym(i, j) * lx * ly * fac
 
-                        Kw1_0   +=  1j * self._build_Kw1(i, j) * ny * fac
-                        Kw1_1   +=  1j * self._build_Kw1(i, j) * nx * fac
-                        w2K_0   +=  1j * self._build_w2K(i, j) * ny * fac
-                        w2K_1   +=  1j * self._build_w2K(i, j) * nx * fac
+                        Kw1_0   +=  1j * self._build_Kw1(i, j) * ly * fac
+                        Kw1_1   +=  1j * self._build_Kw1(i, j) * lx * fac
+                        w2K_0   +=  1j * self._build_w2K(i, j) * ly * fac
+                        w2K_1   +=  1j * self._build_w2K(i, j) * lx * fac
                 ir2K = ir2(K)
                 Fs[0] +=     ir2K  * ir2(wKw_sym_00) + ir2(Kw1_0) * ir2(w2K_0)
                 Fs[1] +=     ir2K  * ir2(wKw_sym_11) + ir2(Kw1_1) * ir2(w2K_1)
                 Fs[2] +=     ir2K  * ir2(wKw_sym_01) + ir2(Kw1_0) * ir2(w2K_1)
         Fyy, Fxx, Fxy = np.fft.rfft2(Fs).real
-        n0_2d_gg = ny ** 2 * Fyy + nx ** 2 * Fxx + 2 * nx * ny * Fxy    # lensing gradient
-        n0_2d_cc = nx ** 2 * Fyy + ny ** 2 * Fxx - 2 * nx * ny * Fxy    # lensing curl      
+        n0_2d_gg = ly ** 2 * Fyy + lx ** 2 * Fxx + 2 * lx * ly * Fxy    # lensing gradient
+        n0_2d_cc = lx ** 2 * Fyy + ly ** 2 * Fxx - 2 * lx * ly * Fxy    # lensing curl      
         self._response = False      
         return - self.norm * np.array([n0_2d_gg, n0_2d_cc])
