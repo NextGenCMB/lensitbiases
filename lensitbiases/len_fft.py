@@ -54,8 +54,8 @@ class len_fft:
         xipp[1] -= xipp[1, 0, 0]
         self.xipp_m0 = xipp
         # === normalization (for lensing keys at least)
-        norm = (self.box.shape[0] / self.box.lsides[0]) ** 2  # overall final normalization from rfft'ing
-        norm *= (float(self.box.lminbox)) ** 4
+        norm = (self.box.shape[0] / self.box.lsides[0]) * (self.box.shape[1] / self.box.lsides[1])  # overall final normalization from rfft'ing
+        norm *= (float(self.box.lminbox_x)*float(self.box.lminbox_y)) ** 2
         self.norm = norm
 
     def _ifft2(self, rm:np.ndarray):
