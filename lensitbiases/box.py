@@ -56,6 +56,7 @@ class box:
         return self._ellcounts
 
     def rsqd2l(self, r2):
+        assert self.lsides[0] == self.lsides[1], self.lsides
         if self.k2l is None: # default
             return np.int_(np.round(2. * np.pi / self.lsides[0] * np.sqrt(r2)))
         elif self.k2l in ['lensit']:
@@ -77,23 +78,21 @@ class box:
     def ls(self, rfft=True):
         if not rfft:
             assert self.shape[0] == self.shape[1], 'fix following lines'
-        normy, normx = (2*np.pi) / np.array(self.lsides)
+        normy, normx = self.lminbox_y, self.lminbox_x
         l2y, l2x = np.meshgrid((normy*self.ny_1d) ** 2, ((self.nx_1d if rfft else self.ny_1d)*normx) ** 2, indexing='ij')
         return self.lsqd2l(l2y + l2x)
     
     def lx(self, rfft=True):
         if not rfft:
             assert self.shape[0] == self.shape[1], 'fix following lines'
-        normx = (2*np.pi) / np.array(self.lsides[1])
         _, l2x = np.meshgrid(self.ny_1d, (self.nx_1d if rfft else self.ny_1d), indexing='ij')
-        return l2x * normx
+        return l2x * self.lminbox_x
 
     def ly(self, rfft=True):
         if not rfft:
             assert self.shape[0] == self.shape[1], 'fix following lines'
-        normy = (2*np.pi) / np.array(self.lsides[0])
         n2y, _ = np.meshgrid(self.ny_1d, (self.nx_1d if rfft else self.ny_1d), indexing='ij')
-        return n2y * normy
+        return n2y * self.lminbox_y
 
     def triangles_count(self, lx_ly_cond=lambda lx,ly: np.ones(lx.shape, dtype=bool)):
         """Returns number of pairs of vector l1, l2 such l1 + l2 = L for each vector L, including cuts on l1 and l2
@@ -110,12 +109,13 @@ class box:
         if not rfft:
             assert self.shape[0] == self.shape[1], 'fix following line'
         s = self.rshape if rfft else self.shape
-        k2y, k2x = np.meshgrid(self.ny_1d ** 2, (self.nx_1d ** 2 if rfft else self.ny_1d ** 2), indexing='ij')
-        k2 = k2y + k2x
+        lm_x, lm_y = self.lminbox_x, self.lminbox_y
+        l2y, l2x = np.meshgrid((self.ny_1d*lm_y) ** 2, ((self.nx_1d if rfft else self.ny_1d)*lm_x)**2, indexing='ij')
+        l2 = l2y + l2x
         cos2p = np.ones(s, dtype=float)
-        cos2p[1:] = 2 * k2x[1:] / k2[1:] - 1.
+        cos2p[1:] = 2 * l2x[1:] / l2[1:] - 1.
         sin2p = np.zeros(s, dtype=float)
-        sin2p[1:] = np.outer(2 * self.ny_1d[1:], self.nx_1d if rfft else self.ny_1d) / k2[1:]
+        sin2p[1:] = np.outer(2 * self.ny_1d[1:]*lm_y, (self.nx_1d if rfft else self.ny_1d)*lm_x) / l2[1:]
         return cos2p, sin2p
 
     def X2S(self, S, X, rfft=True):
@@ -145,9 +145,8 @@ class box:
 
         """
         nl = 2 * self._get_lcounts()
-        lx, ly = rfft2_reals(self.shape)
-        normx, normy = 2*np.pi/np.array(self.lsides)
-        for l in np.array(self.lsqd2l( (lx*normx) ** 2 + (ly*normy) ** 2), dtype=int):
+        ny, nx = rfft2_reals(self.shape)
+        for l in np.array(self.lsqd2l( (nx*self.lminbox_x) ** 2 + (ny*self.lminbox_y) ** 2), dtype=int):
             nl[l] -= 1
         return nl
 

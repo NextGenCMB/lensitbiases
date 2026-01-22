@@ -39,23 +39,31 @@ class len_fft:
 
         self.cunl_ls   = self._cldict2arr(cls_unl)
         # === precalc of deflection corr fct:
-        ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
+        lmin_y, lmin_x = self.box.lminbox_y, self.box.lminbox_x
+        ly, lx = np.meshgrid(self.box.ny_1d*lmin_y, self.box.nx_1d*lmin_x, indexing='ij')
         ls = self.box.ls()
+        #assert self.box.lsides[0] == self.box.lsides[1], 'fix following lines'
         if cpp.ndim == 1:
-            xipp = np.array([self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * ny ** 2),
-                            self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * nx * ny)])# 01 or 10
+            # inverse fft has 1/N normalization
+            xipp = np.array([self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * ly ** 2),
+                             self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * lx * ly), # 01 or 10
+                             self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * lx ** 2),])
         elif cpp.shape == self.box.rshape:
-            xipp = np.array([self._ifft2(-cpp * ny ** 2),
-                             self._ifft2(-cpp * nx * ny)])# 01 or 10
+            xipp = np.array([self._ifft2(-cpp * ly ** 2),
+                             self._ifft2(-cpp * lx * ly), # 01 or 10
+                             self._ifft2(-cpp * lx ** 2),])
         else:
             assert 0, 'dont know what to do with this cpp input'
 
         xipp[0] -= xipp[0, 0, 0]
         xipp[1] -= xipp[1, 0, 0]
+        xipp[2] -= xipp[2, 0, 0]
         self.xipp_m0 = xipp
         # === normalization (for lensing keys at least)
-        norm = (self.box.shape[0] / self.box.lsides[0]) * (self.box.shape[1] / self.box.lsides[1])  # overall final normalization from rfft'ing
-        norm *= (float(self.box.lminbox_x)*float(self.box.lminbox_y)) ** 2
+        # overall final normalization from rfft'ing
+        norm = (self.box.shape[0] / self.box.lsides[0]) * (self.box.shape[1] / self.box.lsides[1])  
+        # Dont need the following anymore after turning all n's to ls
+        # norm *= (float(self.box.lminbox_x)*float(self.box.lminbox_y)) ** 2
         self.norm = norm
 
     def _ifft2(self, rm:np.ndarray):
@@ -112,27 +120,29 @@ class len_fft:
         for iST, ST in enumerate(STs):
             for XY in XYs:  # === TT, TE, ET, TE, EE, BB at most
                 unlCST[iST] += self._get_clmat(X2i[XY[0]], X2i[XY[1]]) * self.box.X2S(ST[0], XY[0]) * self.box.X2S(ST[1], XY[1])
-        nyx = np.array(np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij'))
+        lmin_y, lmin_x = self.box.lminbox_y, self.box.lminbox_x
+        lyx = np.array(np.meshgrid(self.box.ny_1d*lmin_y, self.box.nx_1d*lmin_x, indexing='ij'))
         if der_axis is not None:
-            unlCST = unlCST * (1j * nyx[der_axis])
+            # do I need n or l here ?
+            unlCST = unlCST * (1j * lyx[der_axis])
         # === Perturbatively lensed Stokes spectra
-        xism = [self.xipp_m0[0], self.xipp_m0[1], self.xipp_m0[0].transpose()]
+        xism = self.xipp_m0 ## yy, yx, xx
         aibi = [(0, 0, 1), (1, 1, 1), (0, 1, 2)]  # axis and mutliplicity count; (0 1) same as (1 0)
         for a1, b1, m1 in aibi * (nmax > 0):
             f1 = xism[a1 + b1]
-            int1 = -nyx[a1] * nyx[b1]
+            int1 = -lyx[a1] * lyx[b1]
             lenCST[0] += m1 * f1 * ir2(unlCST * int1)
             for a2, b2, m2 in aibi * (nmax > 1):
                 f2 = xism[a2 + b2]
-                int2 = -int1 * nyx[a2] * nyx[b2]
+                int2 = -int1 * lyx[a2] * lyx[b2]
                 lenCST[1] +=  (m1 * m2) * f1 * f2 * ir2(unlCST * int2)
                 for a3, b3, m3 in aibi * (nmax > 2):
                     f3 = xism[a3 + b3]
-                    int3 = -int2 * nyx[a3] * nyx[b3]
+                    int3 = -int2 * lyx[a3] * lyx[b3]
                     lenCST[2] += (m1 * m2 * m3) * f1 * f2 * f3 * ir2(unlCST * int3)
                     for a4, b4, m4 in aibi * (nmax > 3):
                         f4 = xism[a4 + b4]
-                        int4 = -int3 * nyx[a4] * nyx[b4]
+                        int4 = -int3 * lyx[a4] * lyx[b4]
                         lenCST[3] += (m1 * m2 * m3 * m4) * f1 * f2 * f3 * f4 * ir2(unlCST * int4)
         factorial = [1, 1, 2, 6, 24, 120, 720]
         for n, lenCSTn in enumerate(lenCST): # Index 0 is order 1
@@ -190,14 +200,14 @@ class len_fft:
         """
         lencls_0, specs = self._build_lenmunl_2d_highorder(nmax, job=job, der_axis=0)
         lencls_1, specs = self._build_lenmunl_2d_highorder(nmax, job=job, der_axis=1)
-        ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
-        k2 = ny ** 2 + nx ** 2
-        k2[0, 0] = 1. # to avoid dividing by zero
+        ly, lx = np.meshgrid(self.box.ny_1d*self.box.lminbox_y, self.box.nx_1d*self.box.lminbox_x, indexing='ij')
+        l2 = ly ** 2 + lx ** 2
+        l2[0, 0] = 1. # to avoid dividing by zero
         X2i = {'T': 0, 'E': 1, 'B': 2}
         ret = dict()
         for spec in specs:
             X, Y = spec.upper()
-            ret[spec] = self._get_clmat(X2i[X], X2i[Y])  + (lencls_0[spec] * ny + lencls_1[spec] * nx) / k2
+            ret[spec] = self._get_clmat(X2i[X], X2i[Y])  + (lencls_0[spec] * ly + lencls_1[spec] * lx) / l2
         return ret
 
 

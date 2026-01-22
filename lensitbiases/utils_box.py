@@ -28,18 +28,18 @@ def rfft2_reals(shape):
 
     """
     N0, N1 = shape
-    fx = [0]
-    fy = [0]
+    f0 = [0]
+    f1 = [0]
     if N1 % 2 == 0:
-        fx.append(0)
-        fy.append(N1 // 2)
+        f0.append(0)
+        f1.append(N1 // 2)
     if N0 % 2 == 0:
-        fx.append(N0 // 2)
-        fy.append(0)
+        f0.append(N0 // 2)
+        f1.append(0)
     if N1 % 2 == 0 and N0 % 2 == 0:
-        fx.append(N0 // 2)
-        fy.append(N1 // 2)
-    return np.array(fx), np.array(fy)
+        f0.append(N0 // 2)
+        f1.append(N1 // 2)
+    return np.array(f0), np.array(f1)
 
 
 def lowprimes(n:np.ndarray or int):
