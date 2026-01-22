@@ -64,23 +64,36 @@ class box:
         else:
             assert 0, self.k2l + ' not implemented'
 
+    def lsqd2l(self, l2):
+        if self.k2l is None: # default
+            return np.int_(np.round(np.sqrt(l2)))
+        elif self.k2l in ['lensit']:
+            k = np.sqrt(l2)
+            return np.uint16(np.round(k - 0.5) + 0.5 * ((k - 0.5) < 0))
+        else:
+            assert 0, self.k2l + ' not implemented'
+   
+
     def ls(self, rfft=True):
         if not rfft:
-            assert self.shape[0] == self.shape[1], 'fix following line'
-        n2y, n2x = np.meshgrid(self.ny_1d ** 2, (self.nx_1d if rfft else self.ny_1d) ** 2, indexing='ij')
-        return self.rsqd2l(n2y + n2x)
+            assert self.shape[0] == self.shape[1], 'fix following lines'
+        normy, normx = (2*np.pi) / np.array(self.lsides)
+        l2y, l2x = np.meshgrid((normy*self.ny_1d) ** 2, ((self.nx_1d if rfft else self.ny_1d)*normx) ** 2, indexing='ij')
+        return self.lsqd2l(l2y + l2x)
     
     def lx(self, rfft=True):
         if not rfft:
-            assert self.shape[0] == self.shape[1], 'fix following line'
-        _, n2x = np.meshgrid(self.ny_1d, (self.nx_1d if rfft else self.ny_1d), indexing='ij')
-        return n2x * (2. * np.pi / self.lsides[1])
+            assert self.shape[0] == self.shape[1], 'fix following lines'
+        normx = (2*np.pi) / np.array(self.lsides[1])
+        _, l2x = np.meshgrid(self.ny_1d, (self.nx_1d if rfft else self.ny_1d), indexing='ij')
+        return l2x * normx
 
     def ly(self, rfft=True):
         if not rfft:
-            assert self.shape[0] == self.shape[1], 'fix following line'
+            assert self.shape[0] == self.shape[1], 'fix following lines'
+        normy = (2*np.pi) / np.array(self.lsides[0])
         n2y, _ = np.meshgrid(self.ny_1d, (self.nx_1d if rfft else self.ny_1d), indexing='ij')
-        return n2y * (2. * np.pi / self.lsides[0])
+        return n2y * normy
 
     def triangles_count(self, lx_ly_cond=lambda lx,ly: np.ones(lx.shape, dtype=bool)):
         """Returns number of pairs of vector l1, l2 such l1 + l2 = L for each vector L, including cuts on l1 and l2
@@ -133,7 +146,8 @@ class box:
         """
         nl = 2 * self._get_lcounts()
         lx, ly = rfft2_reals(self.shape)
-        for l in np.array(self.rsqd2l(lx ** 2 + ly ** 2), dtype=int):
+        normx, normy = 2*np.pi/np.array(self.lsides)
+        for l in np.array(self.lsqd2l( (lx*normx) ** 2 + (ly*normy) ** 2), dtype=int):
             nl[l] -= 1
         return nl
 
@@ -182,7 +196,7 @@ class rectangle(box):
         self.lminbox_y = 2 * np.pi / lsides[0] # This is used for normalizations etc
 
         self.lminbox = min(self.lminbox_x, self.lminbox_y)
-        self.lmaxbox = self.rsqd2l(nx[npixs[1]//2] ** 2 + ny[npixs[0]//2] ** 2)
+        self.lmaxbox = self.lsqd2l( (nx[npixs[1]//2]*self.lminbox_x) ** 2 + (ny[npixs[0]//2]*self.lminbox_y) ** 2)
 
         self._ellcounts = None
         self._cos2p_sin2p = None
