@@ -12,10 +12,25 @@ def cli(arr):
     return ret
 
 class nhl_fft:
-    def __init__(self, cls_noise, cls_noise_filt, cls_w, transf_cl, 
+    def __init__(self, cls_noise:dict|list[dict], cls_noise_filt:dict|list[dict], cls_w:dict, transf_cl:np.ndarray|list, 
                  y_extent_deg=1.85, lminbox=50, lmaxbox=2500, lx_cut=0, lx_lp=0, y2x_axis_ratio=1.,
+                 window_type='squared semi-circle',
                  iso_filt=False, _iso_dat=False, _response=False, k2l=None, cls_w2=None, _Kcache=None, verbose=False):
         """
+        # NOTE: putting this in yasolt, this will be deprecated
+        Parameters
+        ----------
+
+            cls_noise : 
+                noise spectra at each frequency. List of dictionaries with keys 'ee', 'bb', etc.
+            cls_noise_filt : 
+                noise spectra used at each frequency, used for the filtering of the CMB
+            cls_w :
+                spectra used to weight the quadratic estimators
+            transf_cl :
+                beam :math:`b_\ell` at each frequency
+            
+            
          
         More flexible lensing responses and biases calculator allowing anisotropic noise (along one direction, e.g. SPT-3G) and lx-cuts
 
@@ -105,6 +120,8 @@ class nhl_fft:
         self._lmax_B = None
         self._iso_dat = _iso_dat
 
+        self.window_type = window_type
+
         lcell_amin = (self.box.lsides[0] / self.box.shape[0]) / np.pi * 180 * 60
         y_extent = max(int(y_extent_deg * 60 / lcell_amin), 0)
         if verbose:
@@ -113,7 +130,7 @@ class nhl_fft:
 
         self.nchannels = nchannels
         self._multifreq = True
-
+        self.verbose = verbose
         self._Kcache = cacher_mem() if _Kcache is None else _Kcache
 
     def plot_rfft(self, rfftm, kmin=None,title='',**imshow_kwargs):
@@ -126,10 +143,28 @@ class nhl_fft:
         pl.title(title)
         return image
     def _mk_window(self, typ=None):
-        if typ == None:
-            typ == 'box'
-        w = np.where(np.abs(self.box.ny_1d) <= self.y_extent, 1., 0.)
-        w2 = np.fft.irfft(np.fft.rfft(w) ** 2)
+        if typ is None:
+            typ = self.window_type
+        if self.verbose:
+            print('scan h profile:', {0: 'top-hat', 1: 'semi-circle', 2: 'squared semi-circle'}.get(typ, typ))
+        x = np.abs(self.box.ny_1d) / (0.5*self.y_extent)
+        if typ in [0, 'uniform', 'box', 'top-hat', None]:
+            w = np.where(x <= 1., 1., 0.)
+        elif typ in [1, 'semi-circle']:
+            w = np.sqrt(np.where(x < 1., 1. - x*x, 0.))
+        elif typ in [2, 'squared semi-circle']:
+            w = np.where(x < 1., 1. - x*x, 0.)
+        elif typ in ['real', 'nominal', 'real weighted', 3, 4, 5]:
+            w = np.zeros_like(x)
+            nz, = np.where(x <= 1.)
+            assert nz.size%2==1
+            from yasolt.quicknoise.utils_qn import mk_yprofile
+            sort = np.argsort(self.box.ny_1d[nz])
+            profile_type = {3:'real', 4:'nominal', 5:'real weighted'}.get(typ, typ)
+            w[nz[sort]] = mk_yprofile(nz.size, profile_type)
+        else:
+            raise ValueError(f'Unknown window type {typ}')
+        w2 = np.fft.ifft(np.abs(np.fft.fft(np.sqrt(w))) ** 2).real
         return w2/w2[0]
     def _noise_mat(self, cl, y_extent=None, _isofilt=False):
         """Noise covariance matrix resulting from a bunch of scans each with extent y-extent 
@@ -150,8 +185,22 @@ class nhl_fft:
         return np.int_(np.abs(self.box.lx()))
     
     def pcl(self, channel, i, j):
+        """Standard pseudo Cl with isotropic weighting
+         
+        
+        """
         noise_mat = self._noise_mat(self.cls_noise[channel, i, j]) * (np.abs(self.box.lx()) > self.lx_cut)
+        noise_mat *= self._lowpassfunc(self.box.lx()) ** 2
         return (self.box.sum_in_l(noise_mat) / self.box.mode_counts())
+    
+    def cm_vertical(self, channel, i, j):
+        """Vertical 1D Cm power
+        
+        
+        """
+        noise_mat = self._noise_mat(self.cls_noise[channel, i, j]) * (np.abs(self.box.lx()) > self.lx_cut)
+        noise_mat *= self._lowpassfunc(self.box.lx()) ** 2
+        return np.sum(noise_mat, axis=1)
 
     def _lowpassfunc(self, lx):
         lx_lpi = 1./self.lx_lp if self.lx_lp > 0 else 0.
@@ -206,7 +255,7 @@ class nhl_fft:
         if i == 2 and j == 2 and self._lmax_B is not None:
             ret *= (self.box.ls() <= self._lmax_B)
         if self.lx_lp > 0: # Low-pass filter
-            ret *= np.exp(- (self.box.lx() / self.lx_lp) ** 6)
+            ret *= np.exp(- (self.box.lx() / self.lx_lp) ** 12)
         self._Kcache.cache(fn, ret)
         return ret
     

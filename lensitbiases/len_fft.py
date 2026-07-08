@@ -10,7 +10,7 @@ import pyfftw
 
 
 class len_fft:
-    def __init__(self, cls_unl, cpp, lminbox=50, lmaxbox=2500, k2l=None, y2x_axis_ratio=1):
+    def __init__(self, cls_unl:dict, cpp:np.ndarray, lminbox:float=50, lmaxbox:float=2500, k2l=None, y2x_axis_ratio=1):
         """
 
             :param cls_unl: unlensed cls
@@ -37,7 +37,7 @@ class len_fft:
         # === Filter and cls array needed later on:
         #cls_unl = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_unl[k]) for k in cls_unl.keys()}  # filtered maps spectra
 
-        self.cunl_ls   = self._cldict2arr(cls_unl)
+        self.cunl_ls  = self._cldict2arr(cls_unl)
         # === precalc of deflection corr fct:
         lmin_y, lmin_x = self.box.lminbox_y, self.box.lminbox_x
         ly, lx = np.meshgrid(self.box.ny_1d*lmin_y, self.box.nx_1d*lmin_x, indexing='ij')
@@ -53,7 +53,7 @@ class len_fft:
                              self._ifft2(-cpp * lx * ly), # 01 or 10
                              self._ifft2(-cpp * lx ** 2),])
         else:
-            assert 0, 'dont know what to do with this cpp input'
+            assert 0, ('dont know what to do with this cpp input', cpp.shape, self.box.rshape, self.box.shape)
 
         for xi in xipp:
             xi-= xi[0, 0]
@@ -80,7 +80,8 @@ class len_fft:
         else:
             assert 0, 'dont know what to do with this cunl_ls input'
     def _cldict2arr(self, cls_dict):
-        lmaxp1 = np.max([len(cl) for cl in cls_dict.values()])
+        #lmaxp1 = np.max([len(cl) for cl in cls_dict.values()])
+        lmaxp1 = self.box.lmaxbox + 1
         ret = {}
         for i, x in enumerate(['t', 'e', 'b']):
             for j, y in enumerate(['t', 'e', 'b']):

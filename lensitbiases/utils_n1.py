@@ -46,10 +46,10 @@ def cls_dot(cls_list):
     """T E B spectral matrices product
 
         Args:
-            list of dict cls spectral matrices to multiply (given as dictionaries or (3, 3, lmax + 1) arrays
+            list of dict cls spectral matrices to multiply (given as dictionaries or (3, 3, ...) arrays
 
         Returns:
-            (3, 3, lmax + 1) array where 0, 1, 2 stands for T E B
+            (3, 3, ...) array where 0, 1, 2 stands for T E B
 
 
     """
