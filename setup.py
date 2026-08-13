@@ -15,7 +15,9 @@ setup(
     description='FFT-based lensing and other anisotropies N1-N0 bias calculator',
     install_requires=[
         'numpy',
-        'pyfftw'
+        'pyfftw',
+        'ducc0',
+        'psutil',
     ],
     include_package_data=True,  # Ensures data files are included
     package_data={

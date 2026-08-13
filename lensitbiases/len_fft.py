@@ -2,12 +2,13 @@ r"""This module contains rfft methods for calculation of lensed spectra and grad
 
 
 """
-import os
+import os, psutil
 import numpy as np
 from lensitbiases.utils_n1 import extcl, cls_dot
 from lensitbiases.box import box, rectangle
 import pyfftw
 
+from ducc0.fft import r2c
 
 class len_fft:
     def __init__(self, cls_unl:dict, cpp:np.ndarray, lminbox:float=50, lmaxbox:float=2500, k2l=None, y2x_axis_ratio=1):
@@ -43,6 +44,8 @@ class len_fft:
         ly, lx = np.meshgrid(self.box.ny_1d*lmin_y, self.box.nx_1d*lmin_x, indexing='ij')
         ls = self.box.ls()
         #assert self.box.lsides[0] == self.box.lsides[1], 'fix following lines'
+        self.nthreads= int(os.environ.get('OMP_NUM_THREADS', psutil.cpu_count(logical=False)))
+
         if cpp.ndim == 1:
             # inverse fft has 1/N normalization
             xipp = np.array([self._ifft2(extcl(self.box.lmaxbox, -cpp)[ls] * ly ** 2),
@@ -65,11 +68,12 @@ class len_fft:
         # norm *= (float(self.box.lminbox_x)*float(self.box.lminbox_y)) ** 2
         self.norm = norm
 
+
     def _ifft2(self, rm:np.ndarray):
         oshape = self.box.shape if rm.ndim == 2 else (rm.shape[0], self.box.shape[0], self.box.shape[1])
         inpt = pyfftw.empty_aligned(rm.shape, dtype='complex128')
         outp = pyfftw.empty_aligned(oshape, dtype='float64')
-        ifft2 = pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
+        ifft2 = pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=self.nthreads)
         return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
 
     def _get_clmat(self, a, b):
@@ -148,7 +152,11 @@ class len_fft:
         for n, lenCSTn in enumerate(lenCST): # Index 0 is order 1
             lenCSTn *= self.norm ** (n + 1) / factorial[n + 1]  # prefactor for each perturbative order
         #=== Turns lensed Stokes spectra back to T E B:
-        lenCST_tot = np.fft.rfft2(np.sum(lenCST, axis=0)).real if der_axis is None else np.fft.rfft2(np.sum(lenCST, axis=0)).imag # norm already
+        if der_axis is None:
+            lenCST_tot = r2c(np.sum(lenCST, axis=0), axes=(-2, -1), forward=True, inorm=0, nthreads=self.nthreads).real
+        else:
+            lenCST_tot = r2c(np.sum(lenCST, axis=0), axes=(-2, -1), forward=True, inorm=0, nthreads=self.nthreads).imag
+        #lenCST_tot = np.fft.rfft2(np.sum(lenCST, axis=0)).real if der_axis is None else np.fft.rfft2(np.sum(lenCST, axis=0)).imag # norm already
         lencls_tot = dict()
         for spec in specs:
             X, Y = spec.upper()
