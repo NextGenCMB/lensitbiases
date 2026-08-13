@@ -44,7 +44,7 @@ class len_fft:
         ly, lx = np.meshgrid(self.box.ny_1d*lmin_y, self.box.nx_1d*lmin_x, indexing='ij')
         ls = self.box.ls()
         #assert self.box.lsides[0] == self.box.lsides[1], 'fix following lines'
-        self.nthreads= int(os.environ.get('OMP_NUM_THREADS', psutil.cpu_count(logical=False)))
+        self.nthreads= int(os.environ.get('OMP_NUM_THREADS', psutil.cpu_count(logical=False)) or 1)
 
         if cpp.ndim == 1:
             # inverse fft has 1/N normalization
