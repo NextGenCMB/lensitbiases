@@ -11,15 +11,24 @@ import pyfftw
 from ducc0.fft import r2c
 
 class len_fft:
-    def __init__(self, cls_unl:dict, cpp:np.ndarray, lminbox:float=50, lmaxbox:float=2500, k2l=None, y2x_axis_ratio=1):
+    def __init__(self, cls_unl:dict, cpp:np.ndarray, 
+                 lminbox:float=50, lmaxbox:float=2500, k2l=None, y2x_axis_ratio=1,
+                 cpp_x:np.ndarray|None=None, cpp_y:np.ndarray|None=None):
         """
 
             :param cls_unl: unlensed cls
             :param cpp: lenspotential cls, or 2D rfft matrix for anisotropic cases
             :param lminbox: desired minimum multipole of the box
             :param lmaxbox: desired maximum multipole of the box
+            :param k2l: optional conversion scheme from k to l, if non-default
+            :param y2x_axis_ratio: ratio of y-axis to x-axis pixels
+            :param cpp_x: optional lenspotential cls for the first field, if different from cpp
+            :param cpp_y: optional lenspotential cls for the second field, if different from cpp
         
-            
+            In the event that cpp_x and cpp_y are provided, the deflection field is assumed to be different for the two fields being lensed, and the input cpp is the cross-spectrum of the two deflection fields is computed. 
+            The average of cpp_x and cpp_y is used for the zero-lag/variance subtraction, while the spatially-varying part of the deflection correlation function is built from the cross-spectrum cpp alone.
+        
+        
         """
         lside = 2. * np.pi / lminbox
         npix = int(2 * lmaxbox / float(lminbox)) + 1
@@ -58,8 +67,23 @@ class len_fft:
         else:
             assert 0, ('dont know what to do with this cpp input', cpp.shape, self.box.rshape, self.box.shape)
 
-        for xi in xipp:
-            xi-= xi[0, 0]
+        if cpp_x is None and cpp_y is None:
+            for xi in xipp:
+                xi-= xi[0, 0]
+        else:
+            # User wants to compute cross-spectra of two fields with different lensing potentials.
+            # Here cpp_x and cpp_y are the auto-spectra of the deflection of the first and second field, and cpp is their cross-spectrum.
+            assert cpp_x is not None and cpp_y is not None, 'both cpp_x and cpp_y must be provided'
+            N = self.box.shape[0] * self.box.shape[1]
+            s2s_x = [self._sum0l(extcl(self.box.lmaxbox, -cpp_x)[ls] * ly ** 2) / N,
+                     self._sum0l(extcl(self.box.lmaxbox, -cpp_x)[ls] * lx * ly) / N,
+                     self._sum0l(extcl(self.box.lmaxbox, -cpp_x)[ls] * lx ** 2) / N,]
+            s2s_y = [self._sum0l(extcl(self.box.lmaxbox, -cpp_y)[ls] * ly ** 2) / N,
+                     self._sum0l(extcl(self.box.lmaxbox, -cpp_y)[ls] * lx * ly) / N,
+                     self._sum0l(extcl(self.box.lmaxbox, -cpp_y)[ls] * lx ** 2) / N,]
+            for xi, s2_x, s2_y in zip(xipp, s2s_x, s2s_y):
+                xi -= (s2_x + s2_y) * 0.5
+
         self.xipp_m0 = xipp
         # === normalization (for lensing keys at least)
         # overall final normalization from rfft'ing
@@ -75,6 +99,18 @@ class len_fft:
         outp = pyfftw.empty_aligned(oshape, dtype='float64')
         ifft2 = pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=self.nthreads)
         return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
+
+    @staticmethod
+    def _sum0l(rm2d:np.ndarray):
+        """Un-normalized sum over the full l-plane of a real, box.rshape-shaped (rfft
+            half-plane) array, i.e. N * ifft2(rm2d)[0, 0] without paying for the full
+            (and here otherwise discarded) 2D transform.
+
+            The kx=0 and kx=Nyquist columns are not mirrored in the half-plane storage
+            (box.shape[1] is always even) so count once; every other column implicitly
+            also stands for its l -> -l mirror column, so counts twice.
+        """
+        return rm2d[:, 0].sum() + rm2d[:, -1].sum() + 2. * rm2d[:, 1:-1].sum()
 
     def _get_clmat(self, a, b):
         if self.cunl_ls[(a, b)].ndim == 1:
