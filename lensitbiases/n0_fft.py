@@ -26,16 +26,18 @@ class nhl_fft:
 
         cls_ivfs = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_ivfs[k]) for k in cls_ivfs.keys()}  # filtered maps spectra
         cls_w1 = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_w[k]) for k in cls_w.keys()}  # estimator weights spectra
+        self._w1_is_w2 = cls_w2 is None
         if cls_w2 is None:
             cls_w2 = cls_w1
         else:
             cls_w2 = {k: extcl(self.box.lmaxbox + int(self.box.lminbox) + 1, cls_w2[k]) for k in cls_w2.keys()}  # second estimator weights spectra
 
 
-        K_ls, Kw1_ls, w2K_ls, wKw_sym_ls = self._build_cl_ls(cls_ivfs, cls_w1, cls_w2)
+        K_ls, Kw1_ls, w2K_ls, wKw_sym_ls, w2Kw1_ls = self._build_cl_ls(cls_ivfs, cls_w1, cls_w2)
         self.K_ls   = K_ls
         self.Kw1_ls  = Kw1_ls
         self.w2K_ls  = w2K_ls
+        self.w2Kw1_ls = w2Kw1_ls
         self.wKw_sym_ls = wKw_sym_ls
         # We need the symmetric part only of this (there is a trace against symmetric K)
 
@@ -57,7 +59,8 @@ class nhl_fft:
         w2K_ls  = cls_dot([cls_w2, cls_ivfs])
         wKw_sym_ls = 0.5 * (cls_dot([cls_w1, cls_ivfs, cls_w2]) + cls_dot([cls_w2, cls_ivfs, cls_w1]))
         # We need the symmetric part only of this (there is a trace against symmetric K)
-        return K_ls, Kw1_ls, w2K_ls, wKw_sym_ls
+        w2Kw1_ls = cls_dot([cls_w2, cls_ivfs, cls_w1])
+        return K_ls, Kw1_ls, w2K_ls, wKw_sym_ls, w2Kw1_ls
 
 
     def _ifft2(self, rm):
@@ -69,7 +72,7 @@ class nhl_fft:
 
 
 
-    def get_nhl_2d(self, k, _pyfftw=True):
+    def get_nhl_2d(self, k, _pyfftw=True, force_old=True):
         """Returns unormalized QE noise for each and every 2d multipole on the flat-sky box
 
             Note:
@@ -77,7 +80,16 @@ class nhl_fft:
 
             No attempt is at optimization. see get_nhl method for much faster N0 array calculation
 
+            Note:
+                Delegates to _get_nhl_2d_symsafe by default (see its docstring): the original
+                formulation below is not symmetric in cls_w, cls_w2 in general, and is even wrong
+                at matched weights (cls_w2 defaulting to cls_w1, self._w1_is_w2 True) for 'p'-type
+                keys with a genuine T-E correlation (see the module's test). Pass force_old=True
+                to get the original (unfixed) behavior back, e.g. to reproduce old results.
+
         """
+        if not force_old:
+            return self._get_nhl_2d_symsafe(k, _pyfftw=_pyfftw)
         X2i = {'T': 0, 'E': 1, 'B': 2}
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
@@ -123,6 +135,68 @@ class nhl_fft:
 
         return - self.norm * np.array([n0_2d_gg, n0_2d_cc])
 
+
+    def _get_nhl_2d_symsafe(self, k, _pyfftw=True):
+        """Returns unormalized QE noise for each and every 2d multipole on the flat-sky box
+
+            Note:
+                On a square-periodic flat-sky box there can be tiny differences of N0(L) for same |L|
+
+            No attempt is at optimization. see get_nhl method for much faster N0 array calculation
+
+        """
+        X2i = {'T': 0, 'E': 1, 'B': 2}
+        ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
+        ls = self.box.ls()
+
+        ir2 = self._ifft2 if _pyfftw else np.fft.irfft2
+        Ss = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+        Ts = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+
+        XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
+        Fs = np.zeros((4, self.box.shape[0], self.box.shape[1]), dtype=float) # 00, 11, 01 and 10 components
+        for i, S in enumerate(Ss):  # daig and off-diag
+            for T in Ts: # dropping symmetry in S-T for Cw1 != Cw2 and 'p'-type keys
+                K      = np.zeros(self.box.rshape, dtype=complex)
+                w2Kw1_11 = np.zeros(self.box.rshape, dtype=complex)
+                w2Kw1_00 = np.zeros(self.box.rshape, dtype=complex)
+                w2Kw1_01 = np.zeros(self.box.rshape, dtype=complex)
+                w2Kw1_10 = np.zeros(self.box.rshape, dtype=complex)
+                                
+                w2K_1   = np.zeros(self.box.rshape, dtype=complex)
+                Kw1_1   = np.zeros(self.box.rshape, dtype=complex)
+                w2K_0   = np.zeros(self.box.rshape, dtype=complex)
+                Kw1_0   = np.zeros(self.box.rshape, dtype=complex)
+                for XY in XYs:  # TT, TE, ET, EE, BB for MV or SQE
+                    X,Y = XY
+                    fac = self.box.X2S(S, X) * self.box.X2S(T, Y)
+                    if np.any(fac):
+                        #if S != T: fac *= np.sqrt(2.)# off-diagonal terms come with factor of 2
+                        i = X2i[X]; j = X2i[Y]
+                        K      +=       self.K_ls  [i, j][ls] * fac
+                        w2Kw1_00 +=  -1 * self.w2Kw1_ls[i, j][ls] * ny * ny * fac
+                        w2Kw1_11 +=  -1 * self.w2Kw1_ls[i, j][ls] * nx * nx * fac
+                        w2Kw1_01 +=  -1 * self.w2Kw1_ls[i, j][ls] * nx * ny * fac
+                        #wKw_10 +=  -1 * self.w2Kw1_ls[i, j][ls] * ny * nx * fac: exact same
+
+                        Kw1_0   +=  1j * self.Kw1_ls [i, j][ls] * ny * fac
+                        Kw1_1   +=  1j * self.Kw1_ls [i, j][ls] * nx * fac
+                        w2K_0   +=  1j * self.w2K_ls [i, j][ls] * ny * fac
+                        w2K_1   +=  1j * self.w2K_ls [i, j][ls] * nx * fac
+                ir2K = ir2(K)
+                w2Kw1_10 = w2Kw1_01
+                Fs[0] +=     ir2K  * ir2(w2Kw1_00) + ir2(Kw1_0) * ir2(w2K_0)
+                Fs[1] +=     ir2K  * ir2(w2Kw1_11) + ir2(Kw1_1) * ir2(w2K_1)
+                Fs[2] +=     ir2K  * ir2(w2Kw1_01) + ir2(Kw1_0) * ir2(w2K_1)
+                Fs[3] +=     ir2K  * ir2(w2Kw1_10) + ir2(Kw1_1) * ir2(w2K_0)
+
+        Fyy, Fxx, Fxy, Fyx = np.fft.rfft2(Fs).real
+        n0_2d_gg = ny ** 2 * Fyy + nx ** 2 * Fxx + 2 * nx * ny * (Fxy + Fyx) * 0.5    # lensing gradient
+        n0_2d_cc = nx ** 2 * Fyy + ny ** 2 * Fxx - 2 * nx * ny * (Fxy + Fyx) * 0.5    # lensing curl
+
+        return - self.norm * np.array([n0_2d_gg, n0_2d_cc])
+
+
     def get_nhl_ds_2d(self, k, cls_ivfs_dd, _pyfftw=True):
         """Returns unormalized QE noise for each and every 2d multipole on the flat-sky box
 
@@ -149,8 +223,8 @@ class nhl_fft:
 
         XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
         Fs = np.zeros((4, self.box.shape[0], self.box.shape[1]), dtype=float) # 00, 11 and 01 10 components
-        Ks_ls, Ksw_ls, wKs_ls, wKsw_sym_ls = self._build_cl_ls(self.cls_ivfs, self.cls_w1, self.cls_w2)
-        Kd_ls, Kdw_ls, wKd_ls, wKdw_sym_ls = self._build_cl_ls(cls_ivfs_dd,   self.cls_w1, self.cls_w2)
+        Ks_ls, Ksw_ls, wKs_ls, wKsw_sym_ls, _ = self._build_cl_ls(self.cls_ivfs, self.cls_w1, self.cls_w2)
+        Kd_ls, Kdw_ls, wKd_ls, wKdw_sym_ls, _ = self._build_cl_ls(cls_ivfs_dd,   self.cls_w1, self.cls_w2)
 
         for i, S in enumerate(Ss):  # daig and off-diag
             for T in Ts: # not certain about syms in all cases, dropping this
