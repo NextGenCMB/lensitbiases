@@ -3,6 +3,11 @@ import numpy as np
 from lensitbiases.utils_n1 import extcl, cls_dot
 from lensitbiases.box import box
 import pyfftw
+import psutil
+try:
+    import numexpr
+except ImportError:
+    numexpr = None
 
 
 class nhl_fft:
@@ -46,6 +51,7 @@ class nhl_fft:
         self.cls_ivfs = cls_ivfs
 
         self._cos2p_sin2p = None
+        self.nthreads = int(os.environ.get('OMP_NUM_THREADS', psutil.cpu_count(logical=False)) or 1)
 
         # === normalization (for lensing keys at least)
         norm = (self.box.shape[0] / self.box.lsides[0]) ** 2  # overall final normalization from rfft'ing
@@ -67,8 +73,27 @@ class nhl_fft:
         oshape = self.box.shape if rm.ndim == 2 else (rm.shape[0], self.box.shape[0], self.box.shape[1])
         inpt = pyfftw.empty_aligned(rm.shape, dtype='complex128')
         outp = pyfftw.empty_aligned(oshape, dtype='float64')
-        ifft2 = pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=int(os.environ.get('OMP_NUM_THREADS', 1)))
+        ifft2 = pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=self.nthreads)
         return ifft2(pyfftw.byte_align(rm, dtype='complex128'))
+
+    def _ifft2_cached(self, rm, out=None, normalise=True):
+        """Same as _ifft2 but builds the FFTW plan only once per input shape
+
+            If set, out (aligned, e.g. from pyfftw.empty_aligned) receives the result, which avoids a copy.
+            normalise=False skips the 1/N normalization of the inverse FFT (N the number of pixels).
+
+        """
+        plans = self.__dict__.setdefault('_ifft2_plans', {})
+        if rm.shape not in plans:
+            oshape = self.box.shape if rm.ndim == 2 else (rm.shape[0], self.box.shape[0], self.box.shape[1])
+            inpt = pyfftw.empty_aligned(rm.shape, dtype='complex128')
+            outp = pyfftw.empty_aligned(oshape, dtype='float64')
+            plans[rm.shape] = (pyfftw.FFTW(inpt, outp, axes=(-2, -1), direction='FFTW_BACKWARD', threads=self.nthreads), outp)
+        plan, outp = plans[rm.shape]
+        plan.input_array[:] = rm # c2r transforms overwrite their input, so never hand rm itself to FFTW
+        if out is not None:
+            return plan(output_array=out, normalise_idft=normalise)
+        return plan(output_array=outp, normalise_idft=normalise).copy() # outp is reused by the plan
 
 
 
@@ -81,7 +106,7 @@ class nhl_fft:
             No attempt is at optimization. see get_nhl method for much faster N0 array calculation
 
             Note:
-                Delegates to _get_nhl_2d_symsafe by default (see its docstring): the original
+                Delegates to _get_nhl_2d_symsafe(_fast) by default (see its docstring): the original
                 formulation below is not symmetric in cls_w, cls_w2 in general, and is even wrong
                 at matched weights (cls_w2 defaulting to cls_w1, self._w1_is_w2 True) for 'p'-type
                 keys with a genuine T-E correlation (see the module's test). Pass force_old=True
@@ -89,7 +114,7 @@ class nhl_fft:
 
         """
         if not force_old:
-            return self._get_nhl_2d_symsafe(k, _pyfftw=_pyfftw)
+            return self._get_nhl_2d_symsafe_fast(k, _pyfftw=_pyfftw)
         X2i = {'T': 0, 'E': 1, 'B': 2}
         ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
         ls = self.box.ls()
@@ -193,6 +218,79 @@ class nhl_fft:
         Fyy, Fxx, Fxy, Fyx = np.fft.rfft2(Fs).real
         n0_2d_gg = ny ** 2 * Fyy + nx ** 2 * Fxx + 2 * nx * ny * (Fxy + Fyx) * 0.5    # lensing gradient
         n0_2d_cc = nx ** 2 * Fyy + ny ** 2 * Fxx - 2 * nx * ny * (Fxy + Fyx) * 0.5    # lensing curl
+
+        return - self.norm * np.array([n0_2d_gg, n0_2d_cc])
+
+    def _get_nhl_2d_symsafe_fast(self, k, _pyfftw=True):
+        """Same as _get_nhl_2d_symsafe, with each inverse FFT done only once (8 instead of 13 per S, T pair)
+
+            The Fxy and Fyx components only enter through their sum and are accumulated together.
+            The ls-lookups of the spectra are done once, and the ny, nx and 1j factors are applied
+            once per (S, T) pair after summing over XY (all XY-sums are then real).
+            With pyfftw, the inverse FFTs write into preallocated buffers, and Fs is updated in place.
+            Uses numexpr for the elementwise operations if available.
+
+        """
+        X2i = {'T': 0, 'E': 1, 'B': 2}
+        ny, nx = np.meshgrid(self.box.ny_1d, self.box.nx_1d, indexing='ij')
+        ls = self.box.ls()
+
+        if _pyfftw:
+            bufs = [pyfftw.empty_aligned(self.box.shape, dtype='float64') for _ in range(8)]
+            # unnormalized inverse FFTs: every Fs term is a product of two of them, rescaled once at the end
+            ir2 = lambda rm, ib: self._ifft2_cached(rm, out=bufs[ib], normalise=False)
+            r2 = pyfftw.builders.rfft2(pyfftw.empty_aligned((3, self.box.shape[0], self.box.shape[1]), dtype='float64'),
+                                       axes=(-2, -1), threads=self.nthreads)
+        else:
+            ir2 = lambda rm, ib: np.fft.irfft2(rm)
+            r2 = np.fft.rfft2
+        Ss = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+        Ts = ['T'] * (k in ['ptt', 'p']) + ['Q', 'U'] * (k in ['p_p', 'p'])
+
+        XYs = ['TT'] * (k in ['ptt', 'p']) + ['EE', 'BB'] * (k in ['p_p', 'p']) + ['ET', 'TE'] * (k == 'p')
+        # spectra on the 2d box, (K, Kw1, w2K, w2Kw1) for each XY
+        cls2d = {XY: [cl[X2i[XY[0]], X2i[XY[1]]][ls] for cl in [self.K_ls, self.Kw1_ls, self.w2K_ls, self.w2Kw1_ls]] for XY in XYs}
+        nyny, nxnx, nxny = ny * ny, nx * nx, nx * ny
+        Fs = np.zeros((3, self.box.shape[0], self.box.shape[1]), dtype=float) # 00, 11 and 01 + 10 components
+        tmp = np.empty(self.box.shape, dtype=float)
+        def addprods(F, *abs): # F += a0 * b0 + a1 * b1 + ... without temporaries
+            if numexpr is not None:
+                ab = {'F': F, **{'a%s' % i: x for i, x in enumerate(abs)}}
+                expr = 'F + ' + ' + '.join('a%s * a%s' % (i, i + 1) for i in range(0, len(abs), 2))
+                numexpr.evaluate(expr, local_dict=ab, out=F)
+            else:
+                for i in range(0, len(abs), 2):
+                    np.multiply(abs[i], abs[i + 1], out=tmp)
+                    F += tmp
+        def addfac(F, cl, fac): # F += cl * fac
+            if numexpr is not None:
+                numexpr.evaluate('F + cl * fac', local_dict={'F': F, 'cl': cl, 'fac': fac}, out=F)
+            else:
+                F += cl * fac
+        for S in Ss:  # daig and off-diag
+            for T in Ts: # dropping symmetry in S-T for Cw1 != Cw2 and 'p'-type keys
+                K, Kw1, w2K, w2Kw1 = np.zeros((4, self.box.rshape[0], self.box.rshape[1]), dtype=float)
+                for XY in XYs:  # TT, TE, ET, EE, BB for MV or SQE
+                    X,Y = XY
+                    fac = self.box.X2S(S, X) * self.box.X2S(T, Y)
+                    if np.any(fac):
+                        K_XY, Kw1_XY, w2K_XY, w2Kw1_XY = cls2d[XY]
+                        addfac(K, K_XY, fac)
+                        addfac(Kw1, Kw1_XY, fac)
+                        addfac(w2K, w2K_XY, fac)
+                        addfac(w2Kw1, w2Kw1_XY, fac)
+                ir2K = ir2(K, 0)
+                ir2Kw1_0, ir2Kw1_1 = ir2(1j * ny * Kw1, 1), ir2(1j * nx * Kw1, 2)
+                ir2w2K_0, ir2w2K_1 = ir2(1j * ny * w2K, 3), ir2(1j * nx * w2K, 4)
+                addprods(Fs[0], ir2K, ir2(-nyny * w2Kw1, 5), ir2Kw1_0, ir2w2K_0)
+                addprods(Fs[1], ir2K, ir2(-nxnx * w2Kw1, 5), ir2Kw1_1, ir2w2K_1)
+                addprods(Fs[2], ir2K, ir2(-2 * nxny * w2Kw1, 5), ir2Kw1_0, ir2w2K_1, ir2Kw1_1, ir2w2K_0)
+
+        if _pyfftw:
+            Fs *= 1. / np.prod(self.box.shape) ** 2
+        Fyy, Fxx, Fxy_p_Fyx = r2(Fs).real
+        n0_2d_gg = nyny * Fyy + nxnx * Fxx + nxny * Fxy_p_Fyx    # lensing gradient
+        n0_2d_cc = nxnx * Fyy + nyny * Fxx - nxny * Fxy_p_Fyx    # lensing curl
 
         return - self.norm * np.array([n0_2d_gg, n0_2d_cc])
 
