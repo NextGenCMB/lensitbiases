@@ -97,7 +97,7 @@ class nhl_fft:
 
 
 
-    def get_nhl_2d(self, k, _pyfftw=True, force_old=True):
+    def get_nhl_2d(self, k, _pyfftw=True, force_old=False):
         """Returns unormalized QE noise for each and every 2d multipole on the flat-sky box
 
             Note:
